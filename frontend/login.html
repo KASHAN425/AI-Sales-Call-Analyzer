@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log In | Sales Intelligence CRM</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="auth-page-container">
+        <main class="auth-card">
+            <div class="brand">
+                <div class="brand-icon">CRM</div>
+                <div>
+                    <strong style="font-size:16px; color:#0f172a; font-weight:600;">Sales Intelligence CRM</strong>
+                    <div style="font-size:11px; font-weight:500; color:#64748b; text-transform:uppercase;">Call Analytics Portal</div>
+                </div>
+            </div>
+
+            <h1>Sign In to Account</h1>
+            <p class="subtitle">Enter your enterprise credentials to access sales call analytics</p>
+
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email">Work Email</label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        autocomplete="email"
+                        placeholder="rep@company.com"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        autocomplete="current-password"
+                        placeholder="••••••••••••"
+                        required
+                    >
+                </div>
+
+                <button type="submit" id="loginBtn" class="auth-btn">Sign In to CRM</button>
+                <button type="button" id="quickDemoBtn" class="quick-demo-btn">Fill Demo Credentials (demo@example.com)</button>
+                <div class="message" id="loginMessage" role="status"></div>
+            </form>
+
+            <div class="bottom-link">
+                Need a new account?
+                <a href="register.html">Register here</a>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/login.js"></script>
+    <script>
+        const quickDemoBtn = document.getElementById("quickDemoBtn");
+        if (quickDemoBtn) {
+            quickDemoBtn.addEventListener("click", function() {
+                document.getElementById("email").value = "demo@example.com";
+                document.getElementById("password").value = "password123";
+                document.getElementById("loginBtn").click();
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Call Analyzer CRM | Conversation Intelligence</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <!-- ================= CRM SIDEBAR ================= -->
+        <aside class="sidebar">
+
+            <a href="index.html" class="logo">
+                <div class="logo-icon">CRM</div>
+                <div>
+                    <strong>Sales Intelligence</strong>
+                    <span>Call Analytics</span>
+                </div>
+            </a>
+
+            <nav>
+                <a href="index.html" class="nav-item active">
+                    <span>⌂</span>
+                    Dashboard
+                </a>
+
+                <a href="dashboard.html" class="nav-item">
+                    <span>◷</span>
+                    Call History
+                </a>
+            </nav>
+
+            <div class="sidebar-bottom">
+                <div class="system-status">
+                    <span class="status-dot"></span>
+                    <div>
+                        <strong>Analytics Engine</strong>
+                        <small>Operational</small>
+                    </div>
+                </div>
+
+                <div class="user-badge" id="userBadge">
+                    <div class="user-info">
+                        <div class="user-avatar" id="userAvatar">U</div>
+                        <div class="user-details">
+                            <strong id="userName">Sales Representative</strong>
+                            <span id="userEmail">demo@example.com</span>
+                        </div>
+                    </div>
+                    <button class="logout-btn" id="logoutBtn" title="Log Out">⎋</button>
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- ================= MAIN CONTENT ================= -->
+        <main class="main">
+
+            <header class="topbar">
+                <div>
+                    <h1>Sales Call Dashboard</h1>
+                    <p>Analyze client calls, monitor conversation metrics, and review rep performance</p>
+                </div>
+
+                <div class="topbar-badge">
+                    <span></span>
+                    Call Intelligence System Active
+                </div>
+            </header>
+
+            <!-- ================= CRM KPI STATS ================= -->
+            <section class="stats">
+
+                <div class="stat-card">
+                    <div class="stat-icon">◉</div>
+                    <div>
+                        <span>Total Calls Logged</span>
+                        <strong id="totalCalls">0</strong>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">★</div>
+                    <div>
+                        <span>Average Rep Score</span>
+                        <strong id="averageScore">--</strong>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">↗</div>
+                    <div>
+                        <span>Average Buying Intent</span>
+                        <strong id="buyingIntent">--</strong>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">✓</div>
+                    <div>
+                        <span>System Health</span>
+                        <strong class="online">Normal</strong>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ================= CALL UPLOAD SECTION ================= -->
+            <section class="upload-section">
+
+                <div class="section-heading">
+                    <h2>Upload Call Recording</h2>
+                    <p>Select a customer sales call audio file to generate an automated transcript and conversation audit.</p>
+                </div>
+
+                <div class="upload-box" id="uploadBox">
+                    <div class="upload-icon">↑</div>
+
+                    <h3>Select Sales Call Audio File</h3>
+                    <p>Drag and drop audio file here, or click the button below to browse local files.</p>
+
+                    <div class="format-tags">
+                        <span class="format-pill">MP3</span>
+                        <span class="format-pill">WAV</span>
+                        <span class="format-pill">M4A</span>
+                        <span class="format-pill">OGG</span>
+                        <span class="format-pill">FLAC</span>
+                    </div>
+
+                    <input
+                        type="file"
+                        id="audioFile"
+                        accept=".mp3,.wav,.m4a,.ogg,.flac,audio/*"
+                        hidden
+                    >
+
+                    <button
+                        type="button"
+                        class="btn-primary browse-btn"
+                        id="browseBtn"
+                    >
+                        Browse File
+                    </button>
+                </div>
+
+                <!-- SELECTED FILE PREVIEW -->
+                <div
+                    class="selected-file"
+                    id="selectedFile"
+                    style="display:none;"
+                >
+                    <div class="file-info">
+                        <div class="file-icon">♪</div>
+                        <div>
+                            <strong id="fileName">audio.wav</strong>
+                            <small id="fileSize">0 MB</small>
+                        </div>
+                    </div>
+
+                    <button
+                        id="analyzeBtn"
+                        class="analyze-btn"
+                    >
+                        Process Call Recording
+                    </button>
+                </div>
+
+                <!-- PROCESSING LOADER -->
+                <div
+                    class="processing"
+                    id="processing"
+                    style="display:none;"
+                >
+                    <div class="loader"></div>
+                    <h3>Processing call recording...</h3>
+                    <p id="processingText">Transcribing speech and extracting sales diagnostics.</p>
+                </div>
+
+            </section>
+
+            <!-- ================= CRM FEATURE HIGHLIGHTS ================= -->
+            <section class="features">
+
+                <div class="feature-card">
+                    <div>1</div>
+                    <h3>Speaker Turn Diarization</h3>
+                    <p>Separates dialogue between the sales representative and the client with precise timestamps.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div>2</div>
+                    <h3>Customer Sentiment</h3>
+                    <p>Evaluates overall tone, prospect hesitation, and receptiveness throughout the call.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div>3</div>
+                    <h3>Need & Objection Tracking</h3>
+                    <p>Identifies core customer requirements and surfaces objections paired with suggested responses.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div>4</div>
+                    <h3>Performance Coaching</h3>
+                    <p>Generates structured rep evaluation scores, talk-to-listen ratios, and recommended next steps.</p>
+                </div>
+
+            </section>
+
+        </main>
+
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+
+</html>

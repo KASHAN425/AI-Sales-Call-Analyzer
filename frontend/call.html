@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call Analysis Report | Sales Intelligence CRM</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- ================= CRM SIDEBAR ================= -->
+    <aside class="sidebar">
+
+        <a href="index.html" class="logo">
+            <div class="logo-icon">CRM</div>
+            <div>
+                <strong>Sales Intelligence</strong>
+                <span>Call Analytics</span>
+            </div>
+        </a>
+
+        <nav>
+            <a href="index.html" class="nav-item">
+                <span>⌂</span>
+                Dashboard
+            </a>
+
+            <a href="dashboard.html" class="nav-item">
+                <span>◷</span>
+                Call History
+            </a>
+        </nav>
+
+        <div class="sidebar-bottom">
+            <div class="system-status">
+                <span class="status-dot"></span>
+                <div>
+                    <strong>Analytics Engine</strong>
+                    <small>Operational</small>
+                </div>
+            </div>
+
+            <div class="user-badge" id="userBadge">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <div class="user-details">
+                        <strong id="userName">Sales Representative</strong>
+                        <span id="userEmail">demo@example.com</span>
+                    </div>
+                </div>
+                <button class="logout-btn" id="logoutBtn" title="Log Out">⎋</button>
+            </div>
+        </div>
+
+    </aside>
+
+    <!-- ================= MAIN CONTENT ================= -->
+    <main class="main">
+
+        <!-- ACTION BAR -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <a href="dashboard.html" class="btn-secondary">
+                ← Back to Call Archive
+            </a>
+
+            <button type="button" class="btn-secondary" id="exportPdfBtn">
+                Export / Print Summary
+            </button>
+        </div>
+
+        <!-- ================= ANALYSIS HEADER ================= -->
+        <section class="analysis-header">
+            <div>
+                <h2 id="reportTitle">Call Intelligence Report</h2>
+                <p id="reportSubtitle">Automated transcription, conversation diagnostics, and sales execution audit</p>
+            </div>
+
+            <span class="status-badge">
+                Audit Completed
+            </span>
+        </section>
+
+        <!-- ================= SCORE CARDS ================= -->
+        <section class="score-grid">
+
+            <div class="score-card">
+                <span class="label">Rep Performance Score</span>
+                <div class="score" id="salesScore">--</div>
+            </div>
+
+            <div class="score-card">
+                <span class="label">Customer Sentiment</span>
+                <div class="score" id="sentiment">--</div>
+            </div>
+
+            <div class="score-card">
+                <span class="label">Buying Intent</span>
+                <div class="score" id="buyingIntent">--</div>
+            </div>
+
+            <div class="score-card">
+                <span class="label">Call Duration</span>
+                <div class="score" id="duration">--</div>
+            </div>
+
+        </section>
+
+        <!-- ================= ANALYSIS GRID ================= -->
+        <section class="analysis-grid">
+
+            <!-- CUSTOMER ANALYSIS -->
+            <div class="analysis-card">
+                <h3>Customer Profile & Intent</h3>
+
+                <div class="info-row">
+                    <span>Overall Sentiment</span>
+                    <span id="customerSentiment">--</span>
+                </div>
+
+                <div class="info-row">
+                    <span>Buying Intent Rating</span>
+                    <span id="customerIntent">--</span>
+                </div>
+
+                <div class="info-row">
+                    <span>Primary Customer Need</span>
+                    <span id="customerNeed">--</span>
+                </div>
+            </div>
+
+            <!-- SALESPERSON ANALYSIS -->
+            <div class="analysis-card">
+                <h3>Salesperson Execution Metrics</h3>
+
+                <div class="info-row">
+                    <span>Overall Performance Rating</span>
+                    <span id="salespersonScore">--</span>
+                </div>
+
+                <div class="info-row">
+                    <span>Rep Talk Percentage</span>
+                    <span id="communicationScore">--</span>
+                </div>
+
+                <div class="info-row">
+                    <span>Customer Engagement Share</span>
+                    <span id="engagementScore">--</span>
+                </div>
+            </div>
+
+            <!-- CUSTOMER NEEDS -->
+            <div class="analysis-card">
+                <h3>Identified Customer Needs</h3>
+                <div class="tags" id="needs">
+                    <span class="tag">Loading requirements...</span>
+                </div>
+            </div>
+
+            <!-- OBJECTIONS & REBUTTALS -->
+            <div class="analysis-card">
+                <h3>Objections & Counter-Rebuttals</h3>
+                <div class="tags" id="objections">
+                    <span class="tag warning">No objections detected</span>
+                </div>
+            </div>
+
+            <!-- QUESTIONS ASKED -->
+            <div class="analysis-card">
+                <h3>Questions Raised by Customer</h3>
+                <div class="feature-container" id="questions">
+                    <p style="font-size:13px; color:var(--text-muted);">No direct customer questions identified.</p>
+                </div>
+            </div>
+
+            <!-- RECOMMENDATIONS -->
+            <div class="analysis-card">
+                <h3>Strategic Sales Recommendations</h3>
+                <ul class="analysis-list" id="recommendations">
+                    <li>Evaluating recommendations...</li>
+                </ul>
+            </div>
+
+            <!-- STRATEGIC NEXT CALL PLAN -->
+            <div class="analysis-card">
+                <h3>Recommended Next Call Strategy</h3>
+                <div class="feature-container" id="nextCallStrategy">
+                    <p>Generating follow-up plan...</p>
+                </div>
+            </div>
+
+            <!-- RECOMMENDED CONVERSATION SCRIPT -->
+            <div class="analysis-card">
+                <h3>Suggested Follow-Up Script</h3>
+                <div class="feature-container" id="recommendedConversation">
+                    <p>Generating suggested script...</p>
+                </div>
+            </div>
+
+            <!-- SALES COACHING -->
+            <div class="analysis-card">
+                <h3>Sales Coaching Notes</h3>
+                <div class="feature-container" id="salesCoaching">
+                    <p>Generating coaching feedback...</p>
+                </div>
+            </div>
+
+            <!-- FOLLOW UP ACTIONS -->
+            <div class="analysis-card">
+                <h3>Follow-Up Action Items</h3>
+                <div class="feature-container" id="followUpActions">
+                    <p>Generating action checklist...</p>
+                </div>
+            </div>
+
+            <!-- FULL TRANSCRIPT -->
+            <div class="analysis-card full">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                    <h3>Call Transcript & Diarization</h3>
+                    <input
+                        type="text"
+                        id="transcriptSearch"
+                        placeholder="Search conversation..."
+                        style="width:240px; padding:7px 10px; font-size:12.5px;"
+                    >
+                </div>
+
+                <div class="transcript" id="transcript">
+                    <p style="font-size:13px; color:var(--text-muted);">Loading conversation turns...</p>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script src="js/call.js"></script>
+</body>
+
+</html>

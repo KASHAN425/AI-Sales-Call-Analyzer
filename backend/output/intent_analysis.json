@@ -1,0 +1,37 @@
+{
+    "conversation_analysis": [
+        {
+            "start": 5.92,
+            "end": 6.92,
+            "text": "Thank you.",
+            "intent": "positive feedback",
+            "intent_confidence": 0.839,
+            "customer_need": "delivery information",
+            "need_confidence": 0.226,
+            "buying_intent": "medium buying intent",
+            "buying_confidence": 0.604
+        },
+        {
+            "start": 6.92,
+            "end": 9.16,
+            "text": "I am interested in your service.",
+            "intent": "asking for information",
+            "intent_confidence": 0.406,
+            "customer_need": "customer support",
+            "need_confidence": 0.185,
+            "buying_intent": "medium buying intent",
+            "buying_confidence": 0.499
+        },
+        {
+            "start": 9.16,
+            "end": 11.16,
+            "text": "I would like to know about the pricing.",
+            "intent": "asking for information",
+            "intent_confidence": 0.537,
+            "customer_need": "pricing information",
+            "need_confidence": 0.696,
+            "buying_intent": "medium buying intent",
+            "buying_confidence": 0.586
+        }
+    ]
+}

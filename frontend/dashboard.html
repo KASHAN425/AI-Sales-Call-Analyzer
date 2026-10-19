@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call History Archive | Sales Intelligence CRM</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <!-- ================= CRM SIDEBAR ================= -->
+        <aside class="sidebar">
+
+            <a href="index.html" class="logo">
+                <div class="logo-icon">CRM</div>
+                <div>
+                    <strong>Sales Intelligence</strong>
+                    <span>Call Analytics</span>
+                </div>
+            </a>
+
+            <nav>
+                <a href="index.html" class="nav-item">
+                    <span>⌂</span>
+                    Dashboard
+                </a>
+
+                <a href="dashboard.html" class="nav-item active">
+                    <span>◷</span>
+                    Call History
+                </a>
+            </nav>
+
+            <div class="sidebar-bottom">
+                <div class="system-status">
+                    <span class="status-dot"></span>
+                    <div>
+                        <strong>Analytics Engine</strong>
+                        <small>Operational</small>
+                    </div>
+                </div>
+
+                <div class="user-badge" id="userBadge">
+                    <div class="user-info">
+                        <div class="user-avatar" id="userAvatar">U</div>
+                        <div class="user-details">
+                            <strong id="userName">Sales Representative</strong>
+                            <span id="userEmail">demo@example.com</span>
+                        </div>
+                    </div>
+                    <button class="logout-btn" id="logoutBtn" title="Log Out">⎋</button>
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- ================= MAIN CONTENT ================= -->
+        <main class="main">
+
+            <header class="topbar">
+                <div>
+                    <h1>Sales Call History</h1>
+                    <p>Audit and search previously analyzed sales conversations</p>
+                </div>
+
+                <a href="index.html" class="btn-primary">
+                    + Log New Call Recording
+                </a>
+            </header>
+
+            <!-- ================= CRM KPI STATS ================= -->
+            <section class="stats">
+
+                <div class="stat-card">
+                    <div class="stat-icon">◉</div>
+                    <div>
+                        <span>Total Calls Recorded</span>
+                        <strong id="totalCalls">0</strong>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">★</div>
+                    <div>
+                        <span>Average Rep Score</span>
+                        <strong id="averageScore">--</strong>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">↗</div>
+                    <div>
+                        <span>Average Buying Intent</span>
+                        <strong id="buyingIntent">--</strong>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">✓</div>
+                    <div>
+                        <span>System Health</span>
+                        <strong class="online">Normal</strong>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ================= RECENT CALL SUMMARY CARD ================= -->
+            <section class="upload-section">
+
+                <div class="section-heading">
+                    <h2>Most Recent Call Summary</h2>
+                    <p>Key highlights from the latest processed sales call</p>
+                </div>
+
+                <div class="latest-content">
+
+                    <div class="latest-score">
+                        <span>Rep Score</span>
+                        <strong id="latestScore">--</strong>
+                    </div>
+
+                    <div class="latest-info">
+                        <div>
+                            <span>Customer Sentiment</span>
+                            <strong id="latestSentiment">--</strong>
+                        </div>
+
+                        <div>
+                            <span>Buying Intent</span>
+                            <strong id="latestBuyingIntent">--</strong>
+                        </div>
+
+                        <div>
+                            <span>Primary Customer Need</span>
+                            <strong id="latestNeed">--</strong>
+                        </div>
+                    </div>
+
+                </div>
+
+                <button
+                    id="viewLatestBtn"
+                    class="btn-primary"
+                    style="display:none;"
+                >
+                    View Complete Call Details →
+                </button>
+
+            </section>
+
+            <!-- ================= CALL HISTORY ARCHIVE ================= -->
+            <section class="upload-section history-card">
+
+                <div class="section-heading" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+                    <div>
+                        <h2>Call Records Archive</h2>
+                        <p>Complete historical registry of analyzed calls</p>
+                    </div>
+
+                    <div>
+                        <input
+                            type="text"
+                            id="searchCallsInput"
+                            placeholder="Filter by customer need or audio file..."
+                            style="width:280px; padding:8px 12px; font-size:13px;"
+                        >
+                    </div>
+                </div>
+
+                <div id="callHistory" class="history-list">
+                    <div class="history-empty">
+                        <div class="empty-icon">◷</div>
+                        <h3>No calls recorded yet</h3>
+                        <p>Upload a customer call recording to begin tracking sales analytics.</p>
+                        <a href="index.html" class="btn-primary">
+                            Upload First Call
+                        </a>
+                    </div>
+                </div>
+
+            </section>
+
+        </main>
+
+    </div>
+
+    <script src="js/dashboard.js"></script>
+</body>
+
+</html>

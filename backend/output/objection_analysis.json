@@ -1,0 +1,31 @@
+{
+    "objection_question_analysis": [
+        {
+            "start": 5.92,
+            "end": 6.92,
+            "text": "Thank you.",
+            "objection": "feature objection",
+            "objection_confidence": 0.165,
+            "question_type": "support question",
+            "question_confidence": 0.217
+        },
+        {
+            "start": 6.92,
+            "end": 9.16,
+            "text": "I am interested in your service.",
+            "objection": "no objection",
+            "objection_confidence": 0.296,
+            "question_type": "availability question",
+            "question_confidence": 0.19
+        },
+        {
+            "start": 9.16,
+            "end": 11.16,
+            "text": "I would like to know about the pricing.",
+            "objection": "feature objection",
+            "objection_confidence": 0.184,
+            "question_type": "pricing question",
+            "question_confidence": 0.434
+        }
+    ]
+}

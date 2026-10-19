@@ -1,0 +1,32 @@
+{
+    "performance_score": 50,
+    "performance_rating": "Needs Improvement",
+    "metrics": {
+        "salesperson_message_count": 2,
+        "customer_message_count": 3,
+        "salesperson_word_count": 13,
+        "customer_word_count": 16,
+        "salesperson_talk_percentage": 44.83,
+        "customer_talk_percentage": 55.17,
+        "salesperson_questions_detected": 1,
+        "customer_questions_detected": 0,
+        "customer_question_response_rate": null,
+        "detected_objection_count": 0,
+        "engagement_score": 15
+    },
+    "strengths": [
+        "Conversation talk ratio is reasonably balanced.",
+        "Salesperson asked approximately 1 questions.",
+        "No objections were detected by the current objection analysis."
+    ],
+    "improvements": [
+        "Ask and answer questions naturally to maintain engagement."
+    ],
+    "method": "Initial rule-based prototype",
+    "limitations": [
+        "Short test conversations may produce unreliable scores.",
+        "Question detection is based on text patterns.",
+        "Objection handling requires deeper contextual analysis.",
+        "This score is not yet validated against human sales evaluations."
+    ]
+}

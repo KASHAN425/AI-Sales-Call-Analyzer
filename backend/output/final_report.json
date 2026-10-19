@@ -1,0 +1,140 @@
+{
+    "report_generated_at": "2026-10-10T16:59:55.203916",
+    "call_information": {
+        "audio_file": "daeacbb3-606f-44d8-85e7-7f666fb36aec.wav",
+        "language": "en",
+        "total_messages": 5
+    },
+    "conversation": [
+        {
+            "start": 0.0,
+            "end": 2.6,
+            "speaker_id": "SPEAKER_00",
+            "role": "SALES REPRESENTATIVE",
+            "text": "Hello, I am Sales Representative."
+        },
+        {
+            "start": 2.6,
+            "end": 5.92,
+            "speaker_id": "SPEAKER_00",
+            "role": "SALES REPRESENTATIVE",
+            "text": "Today, I will explain our website development services."
+        },
+        {
+            "start": 5.92,
+            "end": 6.92,
+            "speaker_id": "SPEAKER_01",
+            "role": "CUSTOMER",
+            "text": "Thank you."
+        },
+        {
+            "start": 6.92,
+            "end": 9.16,
+            "speaker_id": "SPEAKER_01",
+            "role": "CUSTOMER",
+            "text": "I am interested in your service."
+        },
+        {
+            "start": 9.16,
+            "end": 11.16,
+            "speaker_id": "SPEAKER_01",
+            "role": "CUSTOMER",
+            "text": "I would like to know about the pricing."
+        }
+    ],
+    "customer_analysis": {
+        "sentiment": [
+            {
+                "text": "Thank you.",
+                "label": "POSITIVE",
+                "score": 0.9998
+            },
+            {
+                "text": "I am interested in your service.",
+                "label": "POSITIVE",
+                "score": 0.9997
+            },
+            {
+                "text": "I would like to know about the pricing.",
+                "label": "POSITIVE",
+                "score": 0.9986
+            }
+        ],
+        "intent": [
+            {
+                "text": "Thank you.",
+                "intent": "positive feedback",
+                "intent_score": 0.839,
+                "customer_need": "delivery information",
+                "need_score": 0.2265,
+                "buying_intent": "medium buying intent",
+                "buying_intent_score": 0.6042
+            },
+            {
+                "text": "I am interested in your service.",
+                "intent": "asking for information",
+                "intent_score": 0.4059,
+                "customer_need": "customer support",
+                "need_score": 0.1853,
+                "buying_intent": "medium buying intent",
+                "buying_intent_score": 0.4993
+            },
+            {
+                "text": "I would like to know about the pricing.",
+                "intent": "asking for information",
+                "intent_score": 0.5367,
+                "customer_need": "pricing information",
+                "need_score": 0.6955,
+                "buying_intent": "medium buying intent",
+                "buying_intent_score": 0.5857
+            }
+        ],
+        "objections": [
+            {
+                "text": "Thank you.",
+                "objection": "feature objection",
+                "score": 0.1651
+            },
+            {
+                "text": "I am interested in your service.",
+                "objection": "no objection",
+                "score": 0.2955
+            },
+            {
+                "text": "I would like to know about the pricing.",
+                "objection": "feature objection",
+                "score": 0.1842
+            }
+        ],
+        "questions": [
+            {
+                "text": "Thank you.",
+                "question_type": "support question",
+                "score": 0.2172
+            },
+            {
+                "text": "I am interested in your service.",
+                "question_type": "availability question",
+                "score": 0.1899
+            },
+            {
+                "text": "I would like to know about the pricing.",
+                "question_type": "pricing question",
+                "score": 0.4339
+            }
+        ]
+    },
+    "salesperson_analysis": {
+        "performance_score": 80,
+        "performance_rating": "Good",
+        "metrics": {
+            "salesperson_message_count": 2,
+            "customer_message_count": 3,
+            "salesperson_word_count": 13,
+            "customer_word_count": 16,
+            "salesperson_talk_percentage": 44.83,
+            "customer_talk_percentage": 55.17,
+            "salesperson_questions": 0
+        }
+    }
+}

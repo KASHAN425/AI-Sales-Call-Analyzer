@@ -1,0 +1,41 @@
+{
+    "audio_file": "daeacbb3-606f-44d8-85e7-7f666fb36aec.wav",
+    "language": "en",
+    "conversation": [
+        {
+            "start": 0.0,
+            "end": 2.6,
+            "speaker_id": "SPEAKER_00",
+            "role": "SALES REPRESENTATIVE",
+            "text": "Hello, I am Sales Representative."
+        },
+        {
+            "start": 2.6,
+            "end": 5.92,
+            "speaker_id": "SPEAKER_00",
+            "role": "SALES REPRESENTATIVE",
+            "text": "Today, I will explain our website development services."
+        },
+        {
+            "start": 5.92,
+            "end": 6.92,
+            "speaker_id": "SPEAKER_01",
+            "role": "CUSTOMER",
+            "text": "Thank you."
+        },
+        {
+            "start": 6.92,
+            "end": 9.16,
+            "speaker_id": "SPEAKER_01",
+            "role": "CUSTOMER",
+            "text": "I am interested in your service."
+        },
+        {
+            "start": 9.16,
+            "end": 11.16,
+            "speaker_id": "SPEAKER_01",
+            "role": "CUSTOMER",
+            "text": "I would like to know about the pricing."
+        }
+    ]
+}

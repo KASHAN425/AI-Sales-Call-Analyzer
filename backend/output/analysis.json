@@ -1,0 +1,19 @@
+{
+    "sentiment": [
+        {
+            "text": "Thank you.",
+            "sentiment": "POSITIVE",
+            "confidence": 1.0
+        },
+        {
+            "text": "I am interested in your service.",
+            "sentiment": "POSITIVE",
+            "confidence": 1.0
+        },
+        {
+            "text": "I would like to know about the pricing.",
+            "sentiment": "POSITIVE",
+            "confidence": 0.999
+        }
+    ]
+}
