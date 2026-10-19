@@ -3,6 +3,8 @@ import os
 import mysql.connector
 from mysql.connector import Error
 
+from urllib.parse import urlparse
+
 # Reconfigure stdout/stderr on Windows to avoid UnicodeEncodeError
 if sys.platform == "win32":
     try:
@@ -11,13 +13,26 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-DB_CONFIG = {
-    "host": os.getenv("DB_HOST", os.getenv("MYSQLHOST", "127.0.0.1")),
-    "user": os.getenv("DB_USER", os.getenv("MYSQLUSER", "root")),
-    "password": os.getenv("DB_PASSWORD", os.getenv("MYSQLPASSWORD", "")),
-    "database": os.getenv("DB_NAME", os.getenv("MYSQLDATABASE", "sales_call_analyzer")),
-    "port": int(os.getenv("DB_PORT", os.getenv("MYSQLPORT", 3306)))
-}
+# Check if DATABASE_URL or MYSQL_URL is provided (e.g. Railway connection string)
+database_url = os.getenv("DATABASE_URL") or os.getenv("MYSQL_URL")
+if database_url and ("mysql://" in database_url or "mysql+mysqlconnector://" in database_url):
+    cleaned_url = database_url.replace("mysql+mysqlconnector://", "mysql://")
+    parsed = urlparse(cleaned_url)
+    DB_CONFIG = {
+        "host": parsed.hostname,
+        "user": parsed.username or "root",
+        "password": parsed.password or "",
+        "database": (parsed.path or "").lstrip("/") or "railway",
+        "port": parsed.port or 3306
+    }
+else:
+    DB_CONFIG = {
+        "host": os.getenv("DB_HOST", os.getenv("MYSQLHOST", "127.0.0.1")),
+        "user": os.getenv("DB_USER", os.getenv("MYSQLUSER", "root")),
+        "password": os.getenv("DB_PASSWORD", os.getenv("MYSQLPASSWORD", "")),
+        "database": os.getenv("DB_NAME", os.getenv("MYSQLDATABASE", "sales_call_analyzer")),
+        "port": int(os.getenv("DB_PORT", os.getenv("MYSQLPORT", 3306)))
+    }
 
 
 def get_connection():

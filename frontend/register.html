@@ -83,8 +83,9 @@
         </main>
     </div>
 
+    <script src="js/config.js"></script>
     <script>
-        const API_URL = "http://127.0.0.1:8000";
+        const API_URL = window.API_URL || "http://127.0.0.1:8000";
 
         const registerForm = document.getElementById("registerForm");
         const registerBtn = document.getElementById("registerBtn");
