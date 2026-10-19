@@ -93,6 +93,16 @@ def create_tables():
         except Exception as e:
             print("[DB] Column check notice:", e)
 
+        # Ensure status column exists in calls table
+        try:
+            cursor.execute("SHOW COLUMNS FROM calls LIKE 'status'")
+            col_status = cursor.fetchone()
+            if not col_status:
+                cursor.execute("ALTER TABLE calls ADD COLUMN status VARCHAR(50) DEFAULT 'completed' AFTER audio_file")
+                print("[DB] Added status column to calls table.")
+        except Exception as e:
+            print("[DB] Status column check notice:", e)
+
         connection.commit()
         print("[DB] Users and Calls tables verified successfully.")
 

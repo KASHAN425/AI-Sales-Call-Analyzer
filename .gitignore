@@ -58,6 +58,7 @@ ffmpeg-*/
 # ==================================================
 .DS_Store
 Thumbs.db
+project.md
 Desktop.ini
 .vscode/
 .idea/

@@ -283,7 +283,7 @@ if (analyzeBtn) {
 // POLL ANALYSIS STATUS
 // ==================================================
 
-async function checkStatus(jobId) {
+async function checkStatus(jobId, retryCount = 0) {
     try {
         const response = await fetch(
             `${API_URL}/status/${encodeURIComponent(jobId)}`,
@@ -292,6 +292,15 @@ async function checkStatus(jobId) {
                 headers: getAuthHeaders()
             }
         );
+
+        if (response.status === 404 && retryCount < 6) {
+            console.warn(`Job ${jobId} not found yet (attempt ${retryCount + 1}/6), retrying in 2.5s...`);
+            if (processingText) {
+                processingText.textContent = "Initializing AI analysis pipeline...";
+            }
+            setTimeout(() => checkStatus(jobId, retryCount + 1), 2500);
+            return;
+        }
 
         const data = await readResponse(response);
 
@@ -304,7 +313,7 @@ async function checkStatus(jobId) {
                     data.message || "AI analysis is running...";
             }
 
-            setTimeout(() => checkStatus(jobId), 2000);
+            setTimeout(() => checkStatus(jobId, 0), 2500);
             return;
         }
 
@@ -340,6 +349,11 @@ async function checkStatus(jobId) {
 
     } catch (error) {
         console.error("Analysis status error:", error);
+
+        if (error.message && error.message.includes("Job not found") && retryCount < 6) {
+            setTimeout(() => checkStatus(jobId, retryCount + 1), 2500);
+            return;
+        }
 
         if (
             !error.message.includes("session expired") &&

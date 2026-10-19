@@ -224,8 +224,42 @@ def enrich_report(report):
 
 
 # ==================================================
-# DATABASE SAVE HELPER
+# DATABASE JOB HELPERS
 # ==================================================
+def init_call_in_database(job_id, audio_file, user_id):
+    connection = get_connection()
+    if not connection:
+        return
+    try:
+        cursor = connection.cursor()
+        query = """
+            INSERT INTO calls (user_id, job_id, audio_file, status, report)
+            VALUES (%s, %s, %s, 'processing', '{}')
+            ON DUPLICATE KEY UPDATE status = 'processing'
+        """
+        cursor.execute(query, (int(user_id) if user_id else None, job_id, audio_file))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        print(f"[DB] Call initialized in database with status 'processing' for Job ID: {job_id}")
+    except Exception as e:
+        print(f"[DB] Notice initializing call: {e}")
+
+
+def mark_call_failed_in_database(job_id, error_message):
+    connection = get_connection()
+    if not connection:
+        return
+    try:
+        cursor = connection.cursor()
+        cursor.execute("UPDATE calls SET status = 'failed' WHERE job_id = %s", (job_id,))
+        connection.commit()
+        cursor.close()
+        connection.close()
+    except Exception as e:
+        print(f"[DB] Notice marking call failed: {e}")
+
+
 def save_call_to_database(job_id, report, user_id):
     connection = get_connection()
     if not connection:
@@ -240,8 +274,13 @@ def save_call_to_database(job_id, report, user_id):
         report_json = json.dumps(report, ensure_ascii=False)
 
         query = """
-            INSERT INTO calls (user_id, job_id, audio_file, report, performance_score)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO calls (user_id, job_id, audio_file, status, report, performance_score)
+            VALUES (%s, %s, %s, 'completed', %s, %s)
+            ON DUPLICATE KEY UPDATE
+                status = 'completed',
+                report = VALUES(report),
+                performance_score = VALUES(performance_score),
+                audio_file = VALUES(audio_file)
         """
         values = (
             int(user_id) if user_id else None,
@@ -252,7 +291,10 @@ def save_call_to_database(job_id, report, user_id):
         )
         cursor.execute(query, values)
         connection.commit()
-        call_id = cursor.lastrowid
+
+        cursor.execute("SELECT id FROM calls WHERE job_id = %s", (job_id,))
+        row = cursor.fetchone()
+        call_id = row[0] if row else cursor.lastrowid
         print(f"[DB] Call saved successfully with ID: {call_id} for User ID: {user_id}")
         return call_id
     except Exception as e:
@@ -301,6 +343,7 @@ def run_analysis(job_id, file_path, user_id):
     except Exception as e:
         print(f"[Worker] Analysis failed for job {job_id}: {e}")
         traceback.print_exc()
+        mark_call_failed_in_database(job_id, str(e))
         jobs[job_id] = {
             "status": "failed",
             "message": f"Analysis failed: {str(e)}",
@@ -366,6 +409,9 @@ async def analyze_audio(
         "user_id": current_user["id"]
     }
 
+    # Initialize record in MySQL so job is never lost on restart
+    init_call_in_database(job_id, original_name, current_user["id"])
+
     # Start background analysis thread
     thread = threading.Thread(
         target=run_analysis,
@@ -390,20 +436,54 @@ def get_job_status(
     job_id: str,
     current_user: dict = Depends(get_current_user)
 ):
+    # 1. First check in-memory dictionary
     job = jobs.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found.")
+    if job and job.get("status") in ["queued", "processing", "completed", "failed"]:
+        response = {
+            "status": job.get("status"),
+            "message": job.get("message")
+        }
+        if job.get("status") == "completed":
+            response["call_id"] = job.get("call_id")
+            response["report"] = job.get("report")
+        return response
 
-    response = {
-        "status": job.get("status"),
-        "message": job.get("message")
-    }
+    # 2. Database Fallback (if server restarted, multi-worker, or memory cleared)
+    connection = get_connection()
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("SELECT id, status, report, performance_score FROM calls WHERE job_id = %s", (job_id,))
+            row = cursor.fetchone()
+            cursor.close()
+            connection.close()
 
-    if job.get("status") == "completed":
-        response["call_id"] = job.get("call_id")
-        response["report"] = job.get("report")
+            if row:
+                status = row.get("status") or "completed"
+                parsed_report = {}
+                try:
+                    raw_report = row.get("report")
+                    if raw_report and raw_report != "{}":
+                        parsed_report = json.loads(raw_report)
+                except Exception:
+                    parsed_report = {}
 
-    return response
+                if parsed_report and parsed_report.get("call_information"):
+                    status = "completed"
+
+                response = {
+                    "status": status,
+                    "message": "AI analysis is running..." if status == "processing" else ("Analysis completed." if status == "completed" else "Analysis failed."),
+                    "call_id": row["id"],
+                    "report": parsed_report
+                }
+                # Cache back into in-memory jobs
+                jobs[job_id] = response
+                return response
+        except Exception as e:
+            print(f"[DB] Error querying job status fallback: {e}")
+
+    raise HTTPException(status_code=404, detail="Job not found.")
 
 
 # ==================================================
@@ -415,21 +495,41 @@ def get_report_by_job_id(
     current_user: dict = Depends(get_current_user)
 ):
     job = jobs.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found.")
+    if job and job.get("status") == "completed":
+        return {
+            "success": True,
+            "report": job.get("report"),
+            "call_id": job.get("call_id")
+        }
 
-    if job.get("status") != "completed":
+    # Database Fallback
+    connection = get_connection()
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("SELECT id, status, report FROM calls WHERE job_id = %s", (job_id,))
+            row = cursor.fetchone()
+            cursor.close()
+            connection.close()
+
+            if row and row.get("report") and row["report"] != "{}":
+                parsed_report = json.loads(row["report"])
+                return {
+                    "success": True,
+                    "report": parsed_report,
+                    "call_id": row["id"]
+                }
+        except Exception as e:
+            print(f"[DB] Error fetching report fallback: {e}")
+
+    if job:
         return {
             "success": False,
             "status": job.get("status"),
             "message": job.get("message", "Analysis is still in progress.")
         }
 
-    return {
-        "success": True,
-        "report": job.get("report"),
-        "call_id": job.get("call_id")
-    }
+    raise HTTPException(status_code=404, detail="Job not found.")
 
 
 # ==================================================
