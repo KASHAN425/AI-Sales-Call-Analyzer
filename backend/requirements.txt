@@ -4,11 +4,7 @@ python-multipart>=0.0.12
 python-jose>=3.3.0
 bcrypt>=4.0.0
 mysql-connector-python>=8.0.0
-openai-whisper
+google-genai>=1.0.0
 langchain-google-genai>=2.0.0
 langchain-core>=0.3.0
-google-genai>=1.0.0
-torch
-torchaudio
-pyannote.audio>=3.1.0
 requests

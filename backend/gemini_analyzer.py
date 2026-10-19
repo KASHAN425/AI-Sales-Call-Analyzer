@@ -52,12 +52,13 @@ def get_gemini_api_key():
 _llm_instance = None
 
 
-def get_gemini_llm():
+def get_gemini_llm(model_override=None):
     """
     Initializes and caches the LangChain ChatGoogleGenerativeAI client using .invoke().
+    Supports multi-model fallback to avoid rate limits (429).
     """
     global _llm_instance
-    if _llm_instance is not None:
+    if _llm_instance is not None and not model_override:
         return _llm_instance
 
     api_key = get_gemini_api_key()
@@ -68,27 +69,31 @@ def get_gemini_llm():
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
 
-        # Use gemini-3.8-flash for high quality and speed
-        _llm_instance = ChatGoogleGenerativeAI(
-            model="gemini-3.8-flash",
-            google_api_key=api_key,
-            temperature=0.2
-        )
-        print("[Gemini] LangChain ChatGoogleGenerativeAI initialized with gemini-3.8-flash.")
-        return _llm_instance
+        candidate_models = [model_override] if model_override else [
+            "gemini-flash-lite-latest",
+            "gemini-3.8-flash",
+            "gemini-flash-latest"
+        ]
+
+        for model_name in candidate_models:
+            if not model_name:
+                continue
+            try:
+                llm = ChatGoogleGenerativeAI(
+                    model=model_name,
+                    google_api_key=api_key,
+                    temperature=0.2
+                )
+                print(f"[Gemini] LangChain ChatGoogleGenerativeAI initialized with {model_name}.")
+                _llm_instance = llm
+                return _llm_instance
+            except Exception as e:
+                print(f"[Gemini] Could not initialize {model_name}: {e}. Trying next candidate...")
+
+        return None
     except Exception as e:
-        print(f"[Gemini] Could not initialize gemini-3.8-flash: {e}. Trying gemini-3.5-flash-lite...")
-        try:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            _llm_instance = ChatGoogleGenerativeAI(
-                model="gemini-3.5-flash-lite",
-                google_api_key=api_key,
-                temperature=0.2
-            )
-            return _llm_instance
-        except Exception as e2:
-            print(f"[Gemini] Error initializing LangChain Gemini: {e2}")
-            return None
+        print(f"[Gemini] Error loading ChatGoogleGenerativeAI: {e}")
+        return None
 
 
 def extract_llm_text(response):
