@@ -92,7 +92,7 @@ def get_finalized_report(call_id_or_session_id: Any) -> Optional[Dict[str, Any]]
 def should_trigger_battlecard(text: str, role: str) -> bool:
     """
     Evaluates whether the speaker's statement warrants an immediate AI battlecard.
-    Focuses strictly on objections, questions, competitors, or pricing.
+    Triggers on ANY meaningful inquiry, question, objection, or need in English or Urdu/Roman Urdu.
     """
     if role != "CUSTOMER":
         return False
@@ -100,48 +100,29 @@ def should_trigger_battlecard(text: str, role: str) -> bool:
     text_lower = text.lower().strip()
     words = text_lower.split()
 
-    # Don't trigger on trivial pleasantries or single words
-    if len(words) < 3:
+    # Don't trigger on trivial pleasantries or less than 2 words
+    if len(words) < 2:
         return False
 
-    # Filter out trivial mic checks and greetings (even if ending in '?')
-    mic_patterns = [
-        r"^(hello|hi|hey|good morning|good afternoon|good evening)[.?! ]*$",
-        r"\b(can you hear me|can you see my screen|am i audible|hear me ok|hear me well|mic check|sound check)\b",
-        r"^(yes i can|no problem|thank you|thanks|okay sure|great thanks)[.?! ]*$"
+    # Filter out pure mic checks and trivial single-word acknowledgements
+    trivial_patterns = [
+        r"^(hello|hi|hey|good morning|good afternoon|good evening|salam|assalam o alaikum)[.?! ]*$",
+        r"\b(can you hear me|can you see my screen|am i audible|hear me ok|hear me well|mic check|sound check|awaz aa rahi hai)\b",
+        r"^(yes|yeah|yep|no|okay|ok|sure|thanks|thank you|theek hai|haan|jee|acha)[.?! ]*$"
     ]
-    for m in mic_patterns:
+    for m in trivial_patterns:
         if re.search(m, text_lower):
             return False
 
-    trigger_patterns = [
-        # Questions & Inquiries
-        r"\?",
-        r"\b(how much|pricing|cost|costs|quote|quotes|discount|discounts|expensive|cheaper|rates|rate|fees|fee|refund)\b",
-        r"\b(price\b.*\b(high|much|steep|crazy|more|heavy|expensive|higher))\b",
-        r"\b(can you|could you|do you|does it|is it|is there|how does|why should|what about|will you)\b",
-        # Objections - Price & Budget
-        r"\b(too expensive|cannot afford|can't afford|out of budget|no budget|low budget|tight budget|budget is tight|budget constraints)\b",
-        # Objections - Timing
-        r"\b(not now|next quarter|later this year|call me back|bad timing|too busy|wait until|next month|next year|send me an email|let me think|think about it|talk to my|need approval)\b",
-        # Objections - Competitors / Existing Solutions
-        r"\b(competitor|competitors|alternative|alternatives|salesforce|hubspot|gong|chorus|zoho|pipedrive)\b",
-        r"\b(another\s+(tool|system|provider|vendor|solution|software)|already\s+(have|got|using|use|work|happy)|happy with|current vendor)\b",
-        # Objections - Product / Risk
-        r"\b(not interested|don't need|missing feature|doesn't have|lacks|difficult to use|learning curve|security concerns|gdpr|contract|lock-in)\b"
-    ]
-
-    for pat in trigger_patterns:
-        if re.search(pat, text_lower):
-            return True
-
-    return False
+    # If customer says 2 or more meaningful words, ALWAYS provide talking points & instructions!
+    return True
 
 
 def generate_live_battlecard(customer_text: str, conversation_history: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """
     Generates a concise, high-converting live battlecard rebuttal for the sales rep.
-    Must respond in under 1.5s with maximum 30 words for instant cognitive parsing.
+    Tells the rep EXACTLY what to speak ('is sawal per ye jawab bolo').
+    Supports English, Urdu, and Roman Urdu.
     """
     llm = get_gemini_llm()
     if not llm:
@@ -152,25 +133,32 @@ def generate_live_battlecard(customer_text: str, conversation_history: List[Dict
     context_str = "\n".join([f"{t.get('role', 'Speaker')}: {t.get('text', '')}" for t in recent_context])
 
     prompt = f"""
-You are a live real-time AI sales copilot whispering into the sales representative's earpiece during an active sales call.
+You are an expert real-time AI sales copilot whispering into the sales representative's earpiece during an active Zoom sales call.
 The customer just said:
 "{customer_text}"
 
 Recent Context:
 {context_str}
 
-Generate a concise, winning rebuttal or answer for the sales representative.
-Strict Constraints:
-1. 'what_to_say': Maximum 1 to 2 direct spoken sentences (strictly under 30 words). Natural, confident, conversational.
-2. 'key_stat': A quick supporting proof point or differentiator (under 10 words).
-3. 'category': One of ['Pricing Objection', 'Competitor Comparison', 'Timing/Budget', 'Feature Query', 'Trust/Authority'].
+Provide immediate, winning spoken instructions for the representative ('is sawal per ye jawab bolo').
+STRICT INSTRUCTIONS:
+1. 'what_to_say': The EXACT words the representative should speak out loud right now.
+   - If the customer spoke in Urdu or Roman Urdu, write 'what_to_say' in natural, professional Roman Urdu (e.g. "Ji bilkul, hum aapki personal branding ke liye complete custom website aur portfolio create karte hain...").
+   - If the customer spoke in English, write in natural, persuasive English.
+   - Strictly 1 to 2 spoken sentences (under 35 words). Natural, confident, conversational.
+2. 'customer_intent': What the customer is asking for or objecting to (under 6 words).
+3. 'key_bullet_points': Array of 2 quick proof points or benefits the rep can mention.
+4. 'suggested_follow_up': A smart closing or discovery question to keep momentum.
+5. 'category': One of ['Services & Solutions', 'Pricing & Budget', 'Competitor Comparison', 'Timing & Urgency', 'Feature Query', 'Trust & Portfolio'].
 
 Respond ONLY with valid JSON:
 {{
-    "category": "Pricing Objection",
-    "customer_concern": "Summary of concern in 4-6 words",
-    "what_to_say": "Direct script rep should speak right now.",
-    "key_stat": "99.9% uptime or 20% lower TCO",
+    "category": "Services & Solutions",
+    "customer_concern": "Summary of customer question or objection",
+    "what_to_say": "Exact script rep should speak out loud right now.",
+    "key_stat": "Turnaround time: 5-7 days with 100% satisfaction guarantee",
+    "key_bullet_points": ["Custom modern design tailored to your branding", "Mobile-optimized with fast loading speed"],
+    "suggested_follow_up": "What is the primary goal you want this solution to achieve for your business?",
     "confidence": 95
 }}
 """
@@ -187,11 +175,13 @@ Respond ONLY with valid JSON:
         print(f"[Copilot] Battlecard generation error: {e}")
         return {
             "id": f"bc_{int(time.time() * 1000)}",
-            "category": "Quick Guidance",
-            "customer_concern": "Address customer hesitation",
-            "what_to_say": "Acknowledge their point directly, then ask an open discovery question to understand their core priority.",
-            "key_stat": "Active listening increases win rates by 38%",
-            "confidence": 85,
+            "category": "Live Guidance",
+            "customer_concern": "Address customer inquiry",
+            "what_to_say": "Ji bilkul, hum aapki requirements ko effectively fulfill karte hain. Main aapko hamare core packages aur solutions ka brief overview de deta hoon.",
+            "key_stat": "Over 95% client retention and fast delivery",
+            "key_bullet_points": ["Clear value proposition", "Direct customized approach"],
+            "suggested_follow_up": "Aapka main objective ya target launch date kya hai?",
+            "confidence": 90,
             "timestamp": round(time.time(), 1)
         }
 
@@ -246,7 +236,7 @@ def process_live_turn(session_id: str, role: str, text: str) -> Dict[str, Any]:
 def transcribe_audio_chunk(audio_bytes: bytes, mime_type: str = "audio/webm") -> Optional[str]:
     """
     Transcribes a short audio chunk (from Zoom capture or microphone) using Gemini Flash.
-    Returns the verbatim transcribed text.
+    Accurately preserves English, Urdu, and Roman Urdu.
     """
     from gemini_analyzer import get_gemini_api_key
     api_key = get_gemini_api_key()
@@ -261,12 +251,14 @@ def transcribe_audio_chunk(audio_bytes: bytes, mime_type: str = "audio/webm") ->
         client = genai.Client(api_key=api_key)
         prompt = (
             "You are an accurate live speech transcriber. Transcribe the spoken speech in this audio snippet verbatim. "
+            "The speech can be in English, Urdu, or Roman Urdu (Hinglish/Urdish). "
+            "Preserve the exact language and words spoken (do not translate Urdu into English; write what was actually spoken). "
             "Return ONLY the transcribed text. Do not add quotes, commentary, or speaker tags. "
-            "If the audio contains only silence, breathing, or background noise, return an empty string."
+            "If the audio contains only silence, breathing, or background static, return an empty string."
         )
 
         part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
-        candidate_models = ["gemini-flash-lite-latest", "gemini-3.8-flash", "gemini-flash-latest"]
+        candidate_models = ["gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite"]
         for m in candidate_models:
             try:
                 response = client.models.generate_content(

@@ -361,8 +361,9 @@ async function sendTurn(role, text) {
 // Manual Input
 if (sendTurnBtn && manualTurnInput) {
     sendTurnBtn.addEventListener("click", () => {
-        const text = manualTurnInput.value;
-        const role = currentActiveRole || "CUSTOMER";
+        const text = manualTurnInput.value.trim();
+        if (!text) return;
+        const role = speakerRoleSelect ? speakerRoleSelect.value : (currentActiveRole || "CUSTOMER");
         sendTurn(role, text);
         manualTurnInput.value = "";
     });
@@ -425,22 +426,54 @@ async function startZoomAudioCapture() {
             shareZoomAudioBtn.disabled = false;
         }
 
-        // Initialize MediaRecorder for customer speech chunking
-        const audioStream = new MediaStream([audioTracks[0]]);
+        // Initialize recurring standalone cycles (guarantees complete WebM headers for Gemini API)
         const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") 
             ? "audio/webm;codecs=opus" 
             : (MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg");
 
-        zoomAudioRecorder = new MediaRecorder(audioStream, { mimeType: mimeType });
+        function startZoomChunkCycle() {
+            if (!zoomStream || !zoomStream.active) return;
+            const currentTracks = zoomStream.getAudioTracks();
+            if (!currentTracks.length || currentTracks[0].readyState !== "live") return;
 
-        zoomAudioRecorder.ondataavailable = async function (e) {
-            if (e.data && e.data.size > 1500) {
-                await sendAudioChunk(e.data, "CUSTOMER");
+            const stream = new MediaStream([currentTracks[0]]);
+            let chunks = [];
+            try {
+                zoomAudioRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+            } catch (err) {
+                console.warn("[Zoom Audio] Recorder init notice:", err);
+                return;
             }
-        };
 
-        // Slice audio chunks every 3.5 seconds
-        zoomAudioRecorder.start(3500);
+            zoomAudioRecorder.ondataavailable = function (e) {
+                if (e.data && e.data.size > 1500) {
+                    chunks.push(e.data);
+                }
+            };
+
+            zoomAudioRecorder.onstop = async function () {
+                if (chunks.length > 0) {
+                    const completeBlob = new Blob(chunks, { type: mimeType });
+                    if (completeBlob.size > 2000) {
+                        await sendAudioChunk(completeBlob, "CUSTOMER");
+                    }
+                }
+                if (zoomStream && zoomStream.active) {
+                    startZoomChunkCycle();
+                }
+            };
+
+            zoomAudioRecorder.start();
+
+            // Slices every 3.8 seconds with complete container header
+            setTimeout(() => {
+                if (zoomAudioRecorder && zoomAudioRecorder.state === "recording") {
+                    try { zoomAudioRecorder.stop(); } catch (e) {}
+                }
+            }, 3800);
+        }
+
+        startZoomChunkCycle();
 
         audioTracks[0].onended = function () {
             console.log("[Zoom Audio] Audio sharing ended by user.");
@@ -463,27 +496,46 @@ if (shareZoomAudioBtn) {
     shareZoomAudioBtn.addEventListener("click", startZoomAudioCapture);
 }
 
-// Send Audio Blob to Gemini Cloud Audio Endpoint
+// Anti-Spam Speech & Deduplication State
+let repSpeechDebounceTimer = null;
+let accumulatedRepText = "";
+let lastSentRepText = "";
+let lastRepTurnTime = 0;
+let lastSentCustText = "";
+let lastSentCustTime = 0;
+
+// Send Audio Blob to Gemini Cloud Audio Endpoint (Exclusively for Zoom Customer Audio)
 async function sendAudioChunk(audioBlob, role) {
     if (!currentSessionId) {
         await ensureSession();
     }
     const formData = new FormData();
     formData.append("session_id", currentSessionId);
-    formData.append("role", role);
+    // Zoom digital audio stream is 100% CUSTOMER
+    formData.append("role", "CUSTOMER");
     formData.append("audio", audioBlob, "speech_chunk.webm");
 
     try {
         const token = getToken();
+        const headers = token ? { "Authorization": `Bearer ${token}` } : {};
         const res = await fetch(`${API_URL}/live-call/audio-turn`, {
             method: "POST",
-            headers: {
-                "Authorization": `Bearer ${token}`
-            },
+            headers: headers,
             body: formData
         });
         const data = await res.json();
         if (data.success && data.transcribed && data.text) {
+            const cleanText = data.text.trim();
+            const now = Date.now();
+
+            // Anti-spam: ignore if exact duplicate of last customer utterance within 4 seconds
+            if (cleanText.toLowerCase() === lastSentCustText.toLowerCase() && (now - lastSentCustTime) < 4000) {
+                return;
+            }
+
+            lastSentCustText = cleanText;
+            lastSentCustTime = now;
+
             handleIncomingMessage({
                 type: "turn_processed",
                 turn: data.turn,
@@ -551,21 +603,45 @@ function setupAudioMeter(stream) {
 }
 
 // ============================================================
-// LOCAL MICROPHONE & SPEECH RECOGNITION
+// LIVE TRANSCRIPTION PREVIEW BUBBLE (PREVENTS SPAM)
+// ============================================================
+function updateLivePreviewBubble(role, text) {
+    if (!transcriptFeed) return;
+    let previewEl = document.getElementById("liveSpeechPreviewBubble");
+    if (!previewEl) {
+        previewEl = document.createElement("div");
+        previewEl.id = "liveSpeechPreviewBubble";
+        previewEl.style.cssText = "font-size:12.5px; font-style:italic; color:#64748b; padding:8px 12px; border-radius:8px; background:#eff6ff; border:1px dashed #93c5fd; margin-bottom:8px; display:flex; align-items:center; gap:8px;";
+        transcriptFeed.appendChild(previewEl);
+    }
+    previewEl.innerHTML = `
+        <span style="display:inline-block;">✍️</span>
+        <span><strong>You (Sales Rep):</strong> <span style="color:#1e40af;">${text}</span> <small style="color:#64748b;">(speaking...)</small></span>
+    `;
+    transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+}
+
+function removeLivePreviewBubble() {
+    const previewEl = document.getElementById("liveSpeechPreviewBubble");
+    if (previewEl) previewEl.remove();
+}
+
+// ============================================================
+// LOCAL MICROPHONE & SPEECH RECOGNITION (DEDICATED TO SALES REP)
 // ============================================================
 function initLocalMicrophone() {
     // 1. Microphone level meter
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
             setupAudioMeter(stream);
-            if (micStatusText) micStatusText.textContent = "Mic Active";
+            if (micStatusText) micStatusText.textContent = "Mic Active (Rep)";
         }).catch(err => {
             console.warn("Microphone access notice:", err);
             if (micStatusText) micStatusText.textContent = "Mic Blocked";
         });
     }
 
-    // 2. Web Speech Recognition
+    // 2. Web Speech Recognition for Representative
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
         console.warn("Web Speech API not supported. Use Zoom Audio Sharing or manual mode.");
@@ -574,23 +650,65 @@ function initLocalMicrophone() {
 
     speechRecognizer = new SpeechRecognition();
     speechRecognizer.continuous = true;
-    speechRecognizer.interimResults = false;
-    speechRecognizer.lang = "en-US";
+    speechRecognizer.interimResults = true;
+    speechRecognizer.maxAlternatives = 1;
+
+    // Language selection (English or Urdu)
+    const langSelect = document.getElementById("languageSelect");
+    speechRecognizer.lang = langSelect ? langSelect.value : "en-US";
+
+    if (langSelect) {
+        langSelect.addEventListener("change", () => {
+            if (speechRecognizer) {
+                speechRecognizer.lang = langSelect.value;
+                try {
+                    speechRecognizer.stop();
+                } catch (e) {}
+            }
+        });
+    }
 
     speechRecognizer.onresult = function (event) {
-        const lastResultIndex = event.results.length - 1;
-        const transcript = event.results[lastResultIndex][0].transcript.trim();
+        let interimTranscript = '';
+        let finalTranscript = '';
 
-        if (transcript) {
-            // Smart Speaker Role: if objection words present, ensure tagged as CUSTOMER
-            let role = currentActiveRole || "CUSTOMER";
-            const textLower = transcript.toLowerCase();
-            const objectionWords = ["price", "expensive", "cost", "competitor", "salesforce", "hubspot", "discount", "budget", "how much", "can you", "next quarter", "alternative"];
-            if (objectionWords.some(w => textLower.includes(w))) {
-                role = "CUSTOMER";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript;
+            } else {
+                interimTranscript += event.results[i][0].transcript;
             }
+        }
 
-            sendTurn(role, transcript);
+        // Display live in-place preview without spamming separate chat bubbles
+        if (interimTranscript) {
+            updateLivePreviewBubble("SALES REPRESENTATIVE", (accumulatedRepText + " " + interimTranscript).trim());
+        }
+
+        if (finalTranscript) {
+            accumulatedRepText = (accumulatedRepText + " " + finalTranscript).trim();
+            updateLivePreviewBubble("SALES REPRESENTATIVE", accumulatedRepText);
+
+            // Silence debounce timer (900ms): bundles words into a single complete sentence
+            clearTimeout(repSpeechDebounceTimer);
+            repSpeechDebounceTimer = setTimeout(() => {
+                const textToSend = accumulatedRepText.trim();
+                accumulatedRepText = "";
+                removeLivePreviewBubble();
+
+                if (!textToSend || textToSend.length < 2) return;
+
+                // Anti-spam deduplication check
+                if (textToSend.toLowerCase() === lastSentRepText.toLowerCase()) {
+                    return;
+                }
+
+                lastSentRepText = textToSend;
+                lastRepTurnTime = Date.now();
+
+                // Laptop Mic is 100% SALES REPRESENTATIVE
+                sendTurn("SALES REPRESENTATIVE", textToSend);
+            }, 900);
         }
     };
 
@@ -616,8 +734,19 @@ function initLocalMicrophone() {
 // UI RENDERING: TRANSCRIPT BUBBLES
 // ============================================================
 function addTranscriptBubble(turn) {
+    removeLivePreviewBubble();
+
     const isRep = turn.role === "SALES REPRESENTATIVE";
     const isSys = turn.role === "SYSTEM";
+
+    // Anti-duplicate protection: don't append if exact same message as previous bubble
+    const lastBubble = transcriptFeed.lastElementChild;
+    if (lastBubble && !lastBubble.id.includes("liveSpeechPreviewBubble")) {
+        const textEl = lastBubble.querySelector(".bubble-text");
+        if (textEl && textEl.textContent.trim().toLowerCase() === turn.text.trim().toLowerCase()) {
+            return;
+        }
+    }
 
     const bubble = document.createElement("div");
     bubble.className = `transcript-bubble ${isRep ? 'bubble-rep' : (isSys ? '' : 'bubble-cust')}`;
@@ -628,12 +757,14 @@ function addTranscriptBubble(turn) {
         bubble.style.color = "#475569";
     }
 
+    const roleTag = isRep ? "💼 You (Sales Rep)" : (isSys ? "ℹ️ System" : "👤 Customer");
+
     bubble.innerHTML = `
         <div class="bubble-header">
-            <span>${turn.speaker || (isRep ? 'Sales Rep' : 'Customer')}</span>
+            <span><strong>${turn.speaker || roleTag}</strong> <small style="font-size:11px; font-weight:normal; opacity:0.8;">(${roleTag})</small></span>
             <span>${turn.time_str || ''}</span>
         </div>
-        <div>${turn.text}</div>
+        <div class="bubble-text" style="line-height:1.45; font-size:13.5px;">${turn.text}</div>
     `;
 
     if (transcriptFeed.children.length === 1 && transcriptFeed.children[0].textContent.includes("Waiting for conversation")) {
@@ -671,7 +802,7 @@ function updateTalkRatio(stats) {
 }
 
 // ============================================================
-// UI RENDERING: LIVE BATTLECARDS HUD
+// UI RENDERING: LIVE BATTLECARDS HUD (ACTIONABLE IN-CALL GUIDANCE)
 // ============================================================
 function renderActiveBattlecard(bc) {
     if (!bc) return;
@@ -682,25 +813,61 @@ function renderActiveBattlecard(bc) {
     const card = document.createElement("div");
     card.className = "battlecard-active";
     card.id = bc.id || `bc_${Date.now()}`;
+    card.style.cssText = "background:#ffffff; border:2px solid #2563eb; border-radius:12px; padding:18px; box-shadow:0 10px 25px -5px rgba(37, 99, 235, 0.15); margin-bottom:14px; animation: slideIn 0.3s ease-out;";
+
+    const bulletList = (bc.key_bullet_points && bc.key_bullet_points.length > 0)
+        ? bc.key_bullet_points.map(pt => `<li style="margin-bottom:4px; color:#334155;">${pt}</li>`).join("")
+        : (bc.key_stat ? `<li style="color:#334155;">${bc.key_stat}</li>` : "");
+
+    const followUpHtml = bc.suggested_follow_up
+        ? `<div style="margin-top:10px; background:#eff6ff; padding:8px 12px; border-radius:6px; font-size:12px; color:#1e40af; border:1px solid #bfdbfe;">
+             <strong>❓ Recommended Follow-Up Question:</strong><br>"${bc.suggested_follow_up}"
+           </div>`
+        : "";
 
     card.innerHTML = `
-        <div class="battlecard-badge">
-            ⚡ ${bc.category || 'Live Guidance'}
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span style="background:#dbeafe; color:#1e40af; font-size:11px; font-weight:800; padding:4px 10px; border-radius:12px; text-transform:uppercase; letter-spacing:0.5px;">
+                ⚡ ${bc.category || 'Live Guidance'}
+            </span>
+            <span style="font-size:11px; font-weight:700; color:#059669;">
+                Confidence: ${bc.confidence || 95}%
+            </span>
         </div>
-        <div style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px;">
-            CUSTOMER CONCERN: <span style="color:#0f172a;">${bc.customer_concern || 'Customer question'}</span>
+
+        <div style="font-size:11.5px; font-weight:700; color:#64748b; margin-bottom:8px; text-transform:uppercase;">
+            Customer Question / Stated Need:
+            <div style="font-size:14px; font-weight:700; color:#0f172a; margin-top:2px; text-transform:none; line-height:1.4;">
+                "${bc.customer_concern || 'Customer Inquiry'}"
+            </div>
         </div>
-        <div style="font-size:11.5px; font-weight:700; color:#2563eb; text-transform:uppercase; margin-top:8px;">
-            Suggested Live Script (Click to Copy):
+
+        <div style="background:#f8fafc; border-left:4px solid #2563eb; padding:12px 14px; border-radius:0 8px 8px 0; margin-bottom:12px;">
+            <div style="font-size:11px; font-weight:800; color:#2563eb; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">
+                💬 Is Sawal Par Ye Jawab Bolo (Say This Out Loud):
+            </div>
+            <div style="font-size:15px; font-weight:700; color:#0f172a; line-height:1.45; margin-bottom:8px;">
+                "${bc.what_to_say}"
+            </div>
+            <button onclick="copyRebuttalText('${escapeQuotes(bc.what_to_say)}', this)" style="background:#2563eb; color:#ffffff; border:none; border-radius:6px; padding:6px 14px; font-size:11.5px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:5px; transition:background 0.2s;">
+                <span>📋</span> Copy Spoken Script
+            </button>
         </div>
-        <div class="rebuttal-script" onclick="copyRebuttalText('${escapeQuotes(bc.what_to_say)}')">
-            "${bc.what_to_say}"
-            <span style="position:absolute; right:10px; bottom:8px; font-size:11px; color:#2563eb; font-weight:600;">📋 Copy</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:12px;">
-            <span style="color:#059669; font-weight:600;">💡 Key Stat: ${bc.key_stat || '30% Lower TCO'}</span>
-            <button onclick="dismissBattlecard('${card.id}', '${escapeQuotes(bc.category)}', '${escapeQuotes(bc.what_to_say)}')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:5px; padding:4px 8px; font-size:11px; cursor:pointer; font-weight:600;">
-                ✓ Handled
+
+        ${bulletList ? `
+            <div style="font-size:12px; margin-bottom:8px;">
+                <strong style="color:#475569; font-size:11px; text-transform:uppercase;">Key Points to Emphasize:</strong>
+                <ul style="margin:4px 0 0 16px; padding:0; font-size:12px; line-height:1.45;">
+                    ${bulletList}
+                </ul>
+            </div>
+        ` : ''}
+
+        ${followUpHtml}
+
+        <div style="display:flex; justify-content:flex-end; margin-top:12px; padding-top:10px; border-top:1px solid #f1f5f9;">
+            <button onclick="dismissBattlecard('${card.id}', '${escapeQuotes(bc.category)}', '${escapeQuotes(bc.what_to_say)}')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:5px 12px; font-size:11.5px; cursor:pointer; font-weight:700; color:#475569;">
+                ✓ Handled / Done
             </button>
         </div>
     `;
@@ -715,9 +882,17 @@ window.escapeQuotes = function (str) {
     return (str || "").replace(/'/g, "\\'").replace(/"/g, '&quot;');
 };
 
-window.copyRebuttalText = function (text) {
+window.copyRebuttalText = function (text, btn) {
     navigator.clipboard.writeText(text);
-    alert("Rebuttal script copied to clipboard!");
+    if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = "<span>✓</span> Copied to Clipboard!";
+        btn.style.background = "#059669";
+        setTimeout(() => {
+            btn.innerHTML = orig;
+            btn.style.background = "#2563eb";
+        }, 2000);
+    }
 };
 
 window.dismissBattlecard = function (cardId, category, script) {
@@ -807,7 +982,6 @@ if (endCallBtn) {
 // ============================================================
 document.addEventListener("DOMContentLoaded", () => {
     checkAuth();
-    setSpeakerRole("CUSTOMER");
 
     // If session was already running before refresh, resume workspace
     const saved = sessionStorage.getItem("live_copilot_session_id");
