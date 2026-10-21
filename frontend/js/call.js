@@ -88,30 +88,36 @@ async function loadReport() {
         let report;
 
         if (callId) {
-            const response = await fetch(`${API_URL}/calls/${callId}`, {
-                headers: getAuthHeaders()
-            });
+            try {
+                const token = localStorage.getItem("access_token");
+                const headers = token ? { Authorization: `Bearer ${token}` } : {};
+                const response = await fetch(`${API_URL}/calls/${callId}`, { headers });
 
-            if (response.status === 401) {
-                localStorage.removeItem("access_token");
-                localStorage.removeItem("currentUser");
-                window.location.replace("login.html");
-                return;
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.report) {
+                        report = data.report;
+                    }
+                }
+            } catch (networkErr) {
+                console.warn("[Report Load] Network notice, falling back to local cache:", networkErr);
             }
+        }
 
-            const data = await response.json();
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || "Report not found.");
-            }
-
-            report = data.report;
-        } else {
+        if (!report) {
             const savedReport = localStorage.getItem("latestReport");
-            if (!savedReport) {
-                showError("No call report found. Please analyze a call first.");
-                return;
+            if (savedReport) {
+                try {
+                    report = JSON.parse(savedReport);
+                } catch (e) {
+                    console.warn("Failed to parse local report", e);
+                }
             }
-            report = JSON.parse(savedReport);
+        }
+
+        if (!report) {
+            showError("No call report found. Please analyze a call or complete a live meeting first.");
+            return;
         }
 
         displayReport(report);

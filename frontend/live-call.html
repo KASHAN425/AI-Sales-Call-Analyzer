@@ -301,11 +301,27 @@
                         <div class="pane-header">
                             <div>
                                 <strong style="font-size:15px; color:#0f172a;">Live Audio Transcript</strong>
-                                <small style="display:block; color:#64748b; font-size:12px;">Real-time rolling dialogue</small>
+                                <small style="display:block; color:#64748b; font-size:12px;">Real-time rolling dialogue & Zoom stream</small>
                             </div>
-                            <span id="micIndicator" style="font-size:12px; color:#059669; font-weight:600; display:flex; align-items:center; gap:5px;">
-                                <span class="live-pulse"></span> Mic Active
-                            </span>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <button type="button" id="shareZoomAudioBtn" style="background:#2563eb; color:#ffffff; border:none; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:all 0.2s;">
+                                    <span>🎧</span> Share Zoom Audio
+                                </button>
+                                <span id="micIndicator" style="font-size:12px; color:#059669; font-weight:600; display:flex; align-items:center; gap:5px;">
+                                    <span class="live-pulse"></span> <span id="micStatusText">Mic Active</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- LIVE AUDIO LEVEL / VU METER (VISUAL FEEDBACK) -->
+                        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; margin-bottom:12px; display:flex; align-items:center; gap:10px;">
+                            <div style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#475569; text-transform:uppercase;">
+                                <span>🎙️ Audio Meter:</span>
+                            </div>
+                            <div style="flex:1; background:#e2e8f0; height:8px; border-radius:4px; overflow:hidden; position:relative;">
+                                <div id="audioVuMeter" style="background:linear-gradient(90deg, #10b981 60%, #f59e0b 85%, #ef4444 100%); height:100%; width:0%; transition:width 0.08s ease;"></div>
+                            </div>
+                            <span id="audioVuStatus" style="font-size:11px; font-weight:600; color:#64748b; min-width:85px; text-align:right;">Listening...</span>
                         </div>
 
                         <!-- TALK TO LISTEN GAUGE -->
@@ -328,12 +344,25 @@
                             </div>
                         </div>
 
-                        <!-- MANUAL / SPEECH INPUT BAR -->
+                        <!-- MANUAL / SPEECH INPUT BAR & SPEAKER TOGGLE -->
                         <div style="margin-top:14px; padding-top:12px; border-top:1px solid #f1f5f9;">
+                            <!-- Active Speaker Toggle -->
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <div style="display:flex; gap:6px;">
+                                    <button type="button" id="roleBtnCustomer" style="padding:4px 12px; border-radius:6px; font-size:11.5px; font-weight:700; border:1px solid #059669; background:#ecfdf5; color:#065f46; cursor:pointer;">
+                                        👤 Customer Speaking
+                                    </button>
+                                    <button type="button" id="roleBtnRep" style="padding:4px 12px; border-radius:6px; font-size:11.5px; font-weight:700; border:1px solid #cbd5e1; background:#ffffff; color:#475569; cursor:pointer;">
+                                        💼 Rep Speaking
+                                    </button>
+                                </div>
+                                <small style="font-size:11px; color:#94a3b8;">Shortcut: [Tab] toggles speaker</small>
+                            </div>
+
                             <div style="display:flex; gap:8px; margin-bottom:8px;">
-                                <select id="speakerRoleSelect" style="font-size:12px; padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; font-weight:600;">
-                                    <option value="CUSTOMER">👤 Customer Said</option>
-                                    <option value="SALES REPRESENTATIVE">💼 Rep Said</option>
+                                <select id="speakerRoleSelect" style="display:none;">
+                                    <option value="CUSTOMER" selected>CUSTOMER</option>
+                                    <option value="SALES REPRESENTATIVE">SALES REPRESENTATIVE</option>
                                 </select>
                                 <input type="text" id="manualTurnInput" placeholder="Type or speak a dialogue turn..." style="flex:1; font-size:13px; padding:7px 12px; border:1px solid #cbd5e1; border-radius:6px;">
                                 <button id="sendTurnBtn" class="btn-primary" style="padding:6px 14px; font-size:12.5px;">Send</button>
@@ -346,6 +375,8 @@
                                 <button class="quick-demo-btn" onclick="simulateObjection('We don\'t have budget until next quarter.')">⏳ "No budget now"</button>
                                 <button class="quick-demo-btn" onclick="simulateObjection('Does this integrate directly with Salesforce CRM?')">🔌 "Salesforce query"</button>
                                 <button class="quick-demo-btn" onclick="simulateObjection('We are already happy using another tool.')">🛡️ "Happy with competitor"</button>
+                                <button class="quick-demo-btn" onclick="simulateObjection('Can you send me an email with all package pricing?')">📋 "Send email"</button>
+                                <button class="quick-demo-btn" onclick="simulateObjection('What is your security and data privacy policy?')">🔐 "Security query"</button>
                             </div>
                         </div>
                     </div>

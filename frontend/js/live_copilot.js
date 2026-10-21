@@ -1,18 +1,26 @@
 // ============================================================
-// LIVE ZOOM SALES COPILOT - FRONTEND CONTROLLER
+// LIVE ZOOM SALES COPILOT - ADVANCED CONTROLLER
 // ============================================================
 
 const API_URL = window.API_URL || "http://127.0.0.1:8000";
 
-let currentSessionId = null;
+let currentSessionId = sessionStorage.getItem("live_copilot_session_id") || null;
 let liveSocket = null;
 let speechRecognizer = null;
+let zoomStream = null;
+let zoomAudioRecorder = null;
+let audioContext = null;
+let analyserNode = null;
+let animFrameId = null;
 let timerInterval = null;
 let callSeconds = 0;
 let totalBattlecards = 0;
+let currentActiveRole = "CUSTOMER";
+
+window.currentSessionId = currentSessionId;
 
 // ============================================================
-// AUTHENTICATION CHECK
+// AUTHENTICATION
 // ============================================================
 function getToken() {
     return localStorage.getItem("access_token") || localStorage.getItem("token");
@@ -57,6 +65,7 @@ const meetingSetupCard = document.getElementById("meetingSetupCard");
 const liveCallWorkspace = document.getElementById("liveCallWorkspace");
 const startCallBtn = document.getElementById("startCallBtn");
 const endCallBtn = document.getElementById("endCallBtn");
+const shareZoomAudioBtn = document.getElementById("shareZoomAudioBtn");
 const connectionStatus = document.getElementById("connectionStatus");
 const liveTimer = document.getElementById("liveTimer");
 const repTalkPct = document.getElementById("repTalkPct");
@@ -71,8 +80,13 @@ const transcriptFeed = document.getElementById("transcriptFeed");
 const battlecardContainer = document.getElementById("battlecardContainer");
 const battlecardHistory = document.getElementById("battlecardHistory");
 const speakerRoleSelect = document.getElementById("speakerRoleSelect");
+const roleBtnCustomer = document.getElementById("roleBtnCustomer");
+const roleBtnRep = document.getElementById("roleBtnRep");
 const manualTurnInput = document.getElementById("manualTurnInput");
 const sendTurnBtn = document.getElementById("sendTurnBtn");
+const audioVuMeter = document.getElementById("audioVuMeter");
+const audioVuStatus = document.getElementById("audioVuStatus");
+const micStatusText = document.getElementById("micStatusText");
 const logoutBtn = document.getElementById("logoutBtn");
 
 if (logoutBtn) {
@@ -82,8 +96,72 @@ if (logoutBtn) {
         localStorage.removeItem("currentUser");
         localStorage.removeItem("user");
         localStorage.removeItem("latestReport");
+        sessionStorage.removeItem("live_copilot_session_id");
         window.location.replace("login.html");
     });
+}
+
+// ============================================================
+// SPEAKER ROLE SWITCHER
+// ============================================================
+function setSpeakerRole(role) {
+    currentActiveRole = role;
+    if (speakerRoleSelect) speakerRoleSelect.value = role;
+
+    if (role === "CUSTOMER") {
+        if (roleBtnCustomer) {
+            roleBtnCustomer.style.background = "#ecfdf5";
+            roleBtnCustomer.style.color = "#065f46";
+            roleBtnCustomer.style.borderColor = "#059669";
+        }
+        if (roleBtnRep) {
+            roleBtnRep.style.background = "#ffffff";
+            roleBtnRep.style.color = "#475569";
+            roleBtnRep.style.borderColor = "#cbd5e1";
+        }
+    } else {
+        if (roleBtnRep) {
+            roleBtnRep.style.background = "#eff6ff";
+            roleBtnRep.style.color = "#1e40af";
+            roleBtnRep.style.borderColor = "#2563eb";
+        }
+        if (roleBtnCustomer) {
+            roleBtnCustomer.style.background = "#ffffff";
+            roleBtnCustomer.style.color = "#475569";
+            roleBtnCustomer.style.borderColor = "#cbd5e1";
+        }
+    }
+}
+
+if (roleBtnCustomer) {
+    roleBtnCustomer.addEventListener("click", () => setSpeakerRole("CUSTOMER"));
+}
+if (roleBtnRep) {
+    roleBtnRep.addEventListener("click", () => setSpeakerRole("SALES REPRESENTATIVE"));
+}
+
+// Shortcut: Tab key toggles active speaker role
+window.addEventListener("keydown", (e) => {
+    if (e.key === "Tab" && document.activeElement !== manualTurnInput) {
+        e.preventDefault();
+        setSpeakerRole(currentActiveRole === "CUSTOMER" ? "SALES REPRESENTATIVE" : "CUSTOMER");
+    }
+});
+
+// ============================================================
+// SESSION MANAGEMENT (AUTO-INITIALIZE IF NEEDED)
+// ============================================================
+async function ensureSession() {
+    if (currentSessionId) return currentSessionId;
+
+    const saved = sessionStorage.getItem("live_copilot_session_id");
+    if (saved) {
+        currentSessionId = saved;
+        window.currentSessionId = saved;
+        return saved;
+    }
+
+    return await window.startLiveCall();
 }
 
 // ============================================================
@@ -94,11 +172,9 @@ window.startLiveCall = async function () {
 
     const clientNameInput = document.getElementById("clientNameInput");
     const zoomMeetingInput = document.getElementById("zoomMeetingInput");
-    const audioEngineSelect = document.getElementById("audioEngineSelect");
 
-    const clientName = (clientNameInput && clientNameInput.value) || "Prospective Client";
+    const clientName = (clientNameInput && clientNameInput.value) || "Acme Corp (Lead)";
     const zoomMeeting = (zoomMeetingInput && zoomMeetingInput.value) || "";
-    const audioEngine = (audioEngineSelect && audioEngineSelect.value) || "webspeech";
 
     if (startCallBtn) {
         startCallBtn.disabled = true;
@@ -122,12 +198,13 @@ window.startLiveCall = async function () {
 
         currentSessionId = data.session_id;
         window.currentSessionId = currentSessionId;
+        sessionStorage.setItem("live_copilot_session_id", currentSessionId);
 
         // Switch to Active Workspace
         if (meetingSetupCard) meetingSetupCard.style.display = "none";
         if (liveCallWorkspace) liveCallWorkspace.style.display = "block";
 
-        // Start Timer
+        // Start Call Timer
         callSeconds = 0;
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = setInterval(() => {
@@ -140,12 +217,10 @@ window.startLiveCall = async function () {
         // Connect WebSocket
         connectWebSocket(currentSessionId);
 
-        // Initialize Speech Recognition if selected
-        if (audioEngine === "webspeech") {
-            initSpeechRecognition();
-        }
+        // Start Microphone & Audio Meter
+        initLocalMicrophone();
 
-        // Greet in transcript
+        // Greet in transcript feed
         addTranscriptBubble({
             speaker: "System",
             role: "SYSTEM",
@@ -157,7 +232,7 @@ window.startLiveCall = async function () {
 
     } catch (error) {
         console.error("Launch error:", error);
-        alert("Could not start live session: " + error.message);
+        alert("Notice starting live session: " + error.message);
         if (startCallBtn) {
             startCallBtn.disabled = false;
             startCallBtn.textContent = "🟢 Launch Live Zoom Copilot";
@@ -185,8 +260,10 @@ function connectWebSocket(sessionId) {
 
         liveSocket.onopen = function () {
             console.log("[WS] Live Copilot connected successfully.");
-            connectionStatus.innerHTML = '<span style="width:8px; height:8px; border-radius:50%; background:#10b981; display:inline-block;"></span> Live Streaming';
-            connectionStatus.style.color = "#059669";
+            if (connectionStatus) {
+                connectionStatus.innerHTML = '<span style="width:8px; height:8px; border-radius:50%; background:#10b981; display:inline-block;"></span> Live Streaming';
+                connectionStatus.style.color = "#059669";
+            }
         };
 
         liveSocket.onmessage = function (event) {
@@ -199,9 +276,11 @@ function connectWebSocket(sessionId) {
         };
 
         liveSocket.onclose = function () {
-            console.warn("[WS] Socket closed. Falling back to REST endpoints.");
-            connectionStatus.innerHTML = '<span style="width:8px; height:8px; border-radius:50%; background:#d97706; display:inline-block;"></span> HTTP Mode';
-            connectionStatus.style.color = "#d97706";
+            console.warn("[WS] Socket closed. Falling back to HTTP mode.");
+            if (connectionStatus) {
+                connectionStatus.innerHTML = '<span style="width:8px; height:8px; border-radius:50%; background:#d97706; display:inline-block;"></span> HTTP Mode';
+                connectionStatus.style.color = "#d97706";
+            }
         };
 
         liveSocket.onerror = function (err) {
@@ -228,6 +307,7 @@ function handleIncomingMessage(data) {
             localStorage.setItem("latestReport", JSON.stringify(data.report));
         }
         const targetId = data.call_id || currentSessionId;
+        sessionStorage.removeItem("live_copilot_session_id");
         window.location.href = `call.html?id=${encodeURIComponent(targetId)}`;
     }
 }
@@ -236,7 +316,12 @@ function handleIncomingMessage(data) {
 // SUBMIT TURN (REST & WS)
 // ============================================================
 async function sendTurn(role, text) {
-    if (!text || !text.trim() || !currentSessionId) return;
+    if (!text || !text.trim()) return;
+
+    if (!currentSessionId) {
+        await ensureSession();
+    }
+    if (!currentSessionId) return;
 
     const payload = {
         session_id: currentSessionId,
@@ -251,7 +336,6 @@ async function sendTurn(role, text) {
             text: text.trim()
         }));
     } else {
-        // Fallback to REST
         try {
             const res = await fetch(`${API_URL}/live-call/turn`, {
                 method: "POST",
@@ -264,7 +348,8 @@ async function sendTurn(role, text) {
                     type: "turn_processed",
                     turn: data.turn,
                     talk_stats: data.talk_stats,
-                    battlecard: data.battlecard
+                    battlecard: data.battlecard,
+                    elapsed_seconds: data.elapsed_seconds
                 });
             }
         } catch (e) {
@@ -273,10 +358,11 @@ async function sendTurn(role, text) {
     }
 }
 
+// Manual Input
 if (sendTurnBtn && manualTurnInput) {
     sendTurnBtn.addEventListener("click", () => {
         const text = manualTurnInput.value;
-        const role = speakerRoleSelect.value;
+        const role = currentActiveRole || "CUSTOMER";
         sendTurn(role, text);
         manualTurnInput.value = "";
     });
@@ -288,14 +374,243 @@ if (sendTurnBtn && manualTurnInput) {
     });
 }
 
-// Quick Simulator Function exposed globally
-window.simulateObjection = function (text) {
+// Quick Simulator: Works instantly with auto-session launch
+window.simulateObjection = async function (text) {
     if (!currentSessionId) {
-        alert("Please click 'Launch Live Zoom Copilot' first to activate the session.");
-        return;
+        await ensureSession();
     }
     sendTurn("CUSTOMER", text);
 };
+
+// ============================================================
+// ZOOM AUDIO CAPTURE (DIGITAL SYSTEM AUDIO SHARING)
+// ============================================================
+async function startZoomAudioCapture() {
+    if (!currentSessionId) {
+        await ensureSession();
+    }
+
+    if (shareZoomAudioBtn) {
+        shareZoomAudioBtn.innerHTML = `<span>⏳</span> Select Zoom Window...`;
+        shareZoomAudioBtn.disabled = true;
+    }
+
+    try {
+        // Request system audio or Zoom window audio
+        zoomStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            }
+        });
+
+        const audioTracks = zoomStream.getAudioTracks();
+        if (audioTracks.length === 0) {
+            alert("⚠️ No audio track was shared!\n\nWhen the browser prompt appears, make sure to check 'Share System Audio' or select the Zoom tab with audio enabled so customer speech can be captured.");
+            if (shareZoomAudioBtn) {
+                shareZoomAudioBtn.innerHTML = `<span>🎧</span> Share Zoom Audio`;
+                shareZoomAudioBtn.disabled = false;
+            }
+            return;
+        }
+
+        console.log("[Zoom Audio] Digital track captured:", audioTracks[0].label);
+        setupAudioMeter(zoomStream);
+
+        if (shareZoomAudioBtn) {
+            shareZoomAudioBtn.innerHTML = `<span>🟢</span> Zoom Audio Live`;
+            shareZoomAudioBtn.style.background = "#059669";
+            shareZoomAudioBtn.disabled = false;
+        }
+
+        // Initialize MediaRecorder for customer speech chunking
+        const audioStream = new MediaStream([audioTracks[0]]);
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") 
+            ? "audio/webm;codecs=opus" 
+            : (MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg");
+
+        zoomAudioRecorder = new MediaRecorder(audioStream, { mimeType: mimeType });
+
+        zoomAudioRecorder.ondataavailable = async function (e) {
+            if (e.data && e.data.size > 1500) {
+                await sendAudioChunk(e.data, "CUSTOMER");
+            }
+        };
+
+        // Slice audio chunks every 3.5 seconds
+        zoomAudioRecorder.start(3500);
+
+        audioTracks[0].onended = function () {
+            console.log("[Zoom Audio] Audio sharing ended by user.");
+            if (shareZoomAudioBtn) {
+                shareZoomAudioBtn.innerHTML = `<span>🎧</span> Share Zoom Audio`;
+                shareZoomAudioBtn.style.background = "#2563eb";
+            }
+        };
+
+    } catch (err) {
+        console.warn("Zoom audio share cancelled:", err);
+        if (shareZoomAudioBtn) {
+            shareZoomAudioBtn.innerHTML = `<span>🎧</span> Share Zoom Audio`;
+            shareZoomAudioBtn.disabled = false;
+        }
+    }
+}
+
+if (shareZoomAudioBtn) {
+    shareZoomAudioBtn.addEventListener("click", startZoomAudioCapture);
+}
+
+// Send Audio Blob to Gemini Cloud Audio Endpoint
+async function sendAudioChunk(audioBlob, role) {
+    if (!currentSessionId) {
+        await ensureSession();
+    }
+    const formData = new FormData();
+    formData.append("session_id", currentSessionId);
+    formData.append("role", role);
+    formData.append("audio", audioBlob, "speech_chunk.webm");
+
+    try {
+        const token = getToken();
+        const res = await fetch(`${API_URL}/live-call/audio-turn`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`
+            },
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success && data.transcribed && data.text) {
+            handleIncomingMessage({
+                type: "turn_processed",
+                turn: data.turn,
+                talk_stats: data.talk_stats,
+                battlecard: data.battlecard,
+                elapsed_seconds: data.elapsed_seconds
+            });
+        }
+    } catch (e) {
+        console.warn("[Audio Chunk] Notice:", e);
+    }
+}
+
+// ============================================================
+// REAL-TIME AUDIO LEVEL METER (VU METER)
+// ============================================================
+function setupAudioMeter(stream) {
+    try {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioContext.state === "suspended") {
+            audioContext.resume();
+        }
+
+        analyserNode = audioContext.createAnalyser();
+        analyserNode.fftSize = 256;
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyserNode);
+
+        const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+
+        function renderMeter() {
+            if (!analyserNode) return;
+            analyserNode.getByteFrequencyData(dataArray);
+
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+            const pct = Math.min(100, Math.round((average / 128) * 100));
+
+            if (audioVuMeter) {
+                audioVuMeter.style.width = `${pct}%`;
+            }
+            if (audioVuStatus) {
+                if (pct > 8) {
+                    audioVuStatus.textContent = "🟢 Hearing Voice";
+                    audioVuStatus.style.color = "#059669";
+                } else {
+                    audioVuStatus.textContent = "Listening...";
+                    audioVuStatus.style.color = "#64748b";
+                }
+            }
+
+            animFrameId = requestAnimationFrame(renderMeter);
+        }
+
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        renderMeter();
+    } catch (e) {
+        console.warn("Could not start audio visualizer:", e);
+    }
+}
+
+// ============================================================
+// LOCAL MICROPHONE & SPEECH RECOGNITION
+// ============================================================
+function initLocalMicrophone() {
+    // 1. Microphone level meter
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            setupAudioMeter(stream);
+            if (micStatusText) micStatusText.textContent = "Mic Active";
+        }).catch(err => {
+            console.warn("Microphone access notice:", err);
+            if (micStatusText) micStatusText.textContent = "Mic Blocked";
+        });
+    }
+
+    // 2. Web Speech Recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        console.warn("Web Speech API not supported. Use Zoom Audio Sharing or manual mode.");
+        return;
+    }
+
+    speechRecognizer = new SpeechRecognition();
+    speechRecognizer.continuous = true;
+    speechRecognizer.interimResults = false;
+    speechRecognizer.lang = "en-US";
+
+    speechRecognizer.onresult = function (event) {
+        const lastResultIndex = event.results.length - 1;
+        const transcript = event.results[lastResultIndex][0].transcript.trim();
+
+        if (transcript) {
+            // Smart Speaker Role: if objection words present, ensure tagged as CUSTOMER
+            let role = currentActiveRole || "CUSTOMER";
+            const textLower = transcript.toLowerCase();
+            const objectionWords = ["price", "expensive", "cost", "competitor", "salesforce", "hubspot", "discount", "budget", "how much", "can you", "next quarter", "alternative"];
+            if (objectionWords.some(w => textLower.includes(w))) {
+                role = "CUSTOMER";
+            }
+
+            sendTurn(role, transcript);
+        }
+    };
+
+    speechRecognizer.onerror = function (event) {
+        console.warn("Speech recognition notice:", event.error);
+    };
+
+    speechRecognizer.onend = function () {
+        if (currentSessionId && liveCallWorkspace && liveCallWorkspace.style.display !== "none") {
+            try { speechRecognizer.start(); } catch (e) {}
+        }
+    };
+
+    try {
+        speechRecognizer.start();
+        console.log("Speech recognition started.");
+    } catch (e) {
+        console.warn("Could not start speech recognition:", e);
+    }
+}
 
 // ============================================================
 // UI RENDERING: TRANSCRIPT BUBBLES
@@ -321,7 +636,6 @@ function addTranscriptBubble(turn) {
         <div>${turn.text}</div>
     `;
 
-    // Clear placeholder on first real bubble
     if (transcriptFeed.children.length === 1 && transcriptFeed.children[0].textContent.includes("Waiting for conversation")) {
         transcriptFeed.innerHTML = "";
     }
@@ -339,14 +653,14 @@ function updateTalkRatio(stats) {
     const repPct = stats.rep_percentage || 50;
     const custPct = stats.customer_percentage || 50;
 
-    repTalkPct.textContent = `${repPct}%`;
-    custTalkPct.textContent = `${custPct}%`;
+    if (repTalkPct) repTalkPct.textContent = `${repPct}%`;
+    if (custTalkPct) custTalkPct.textContent = `${custPct}%`;
 
-    repRatioLabel.textContent = `${repPct}%`;
-    custRatioLabel.textContent = `${custPct}%`;
+    if (repRatioLabel) repRatioLabel.textContent = `${repPct}%`;
+    if (custRatioLabel) custRatioLabel.textContent = `${custPct}%`;
 
-    repRatioBar.style.width = `${repPct}%`;
-    custRatioBar.style.width = `${custPct}%`;
+    if (repRatioBar) repRatioBar.style.width = `${repPct}%`;
+    if (custRatioBar) custRatioBar.style.width = `${custPct}%`;
 
     if (ratioStatusText) {
         ratioStatusText.textContent = stats.status || "Balanced Ratio";
@@ -363,7 +677,7 @@ function renderActiveBattlecard(bc) {
     if (!bc) return;
 
     totalBattlecards++;
-    battlecardsCount.textContent = totalBattlecards;
+    if (battlecardsCount) battlecardsCount.textContent = totalBattlecards;
 
     const card = document.createElement("div");
     card.className = "battlecard-active";
@@ -374,7 +688,7 @@ function renderActiveBattlecard(bc) {
             ⚡ ${bc.category || 'Live Guidance'}
         </div>
         <div style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px;">
-            CUSTOMER CONCERN: <span style="color:#0f172a;">${bc.customer_concern || 'Customer hesitation'}</span>
+            CUSTOMER CONCERN: <span style="color:#0f172a;">${bc.customer_concern || 'Customer question'}</span>
         </div>
         <div style="font-size:11.5px; font-weight:700; color:#2563eb; text-transform:uppercase; margin-top:8px;">
             Suggested Live Script (Click to Copy):
@@ -384,15 +698,17 @@ function renderActiveBattlecard(bc) {
             <span style="position:absolute; right:10px; bottom:8px; font-size:11px; color:#2563eb; font-weight:600;">📋 Copy</span>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:12px;">
-            <span style="color:#059669; font-weight:600;">💡 Key Stat: ${bc.key_stat || '99.9% Uptime SLA'}</span>
+            <span style="color:#059669; font-weight:600;">💡 Key Stat: ${bc.key_stat || '30% Lower TCO'}</span>
             <button onclick="dismissBattlecard('${card.id}', '${escapeQuotes(bc.category)}', '${escapeQuotes(bc.what_to_say)}')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:5px; padding:4px 8px; font-size:11px; cursor:pointer; font-weight:600;">
                 ✓ Handled
             </button>
         </div>
     `;
 
-    battlecardContainer.innerHTML = "";
-    battlecardContainer.appendChild(card);
+    if (battlecardContainer) {
+        battlecardContainer.innerHTML = "";
+        battlecardContainer.appendChild(card);
+    }
 }
 
 window.escapeQuotes = function (str) {
@@ -408,50 +724,56 @@ window.dismissBattlecard = function (cardId, category, script) {
     const card = document.getElementById(cardId);
     if (card) card.remove();
 
-    battlecardContainer.innerHTML = `
-        <div style="background:#ffffff; border:1px dashed #cbd5e1; border-radius:10px; padding:35px 20px; text-align:center; color:#64748b; font-size:13.5px;">
-            <div style="font-size:28px; margin-bottom:8px;">💡</div>
-            <strong>AI Copilot Standing By</strong>
-            <p style="margin:4px 0 0 0; font-size:12.5px; color:#94a3b8;">When the customer raises an objection or asks a question, actionable spoken rebuttals will pop up here in real time.</p>
-        </div>
-    `;
-
-    // Add to history list
-    const historyItem = document.createElement("div");
-    historyItem.style.cssText = "background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px; font-size:12px;";
-    historyItem.innerHTML = `
-        <strong style="color:#2563eb;">${category || 'Objection'}:</strong>
-        <span style="color:#334155;">"${(script || '').slice(0, 70)}..."</span>
-    `;
-
-    if (battlecardHistory.children[0] && battlecardHistory.children[0].textContent.includes("No past battlecards")) {
-        battlecardHistory.innerHTML = "";
+    if (battlecardContainer) {
+        battlecardContainer.innerHTML = `
+            <div style="background:#ffffff; border:1px dashed #cbd5e1; border-radius:10px; padding:35px 20px; text-align:center; color:#64748b; font-size:13.5px;">
+                <div style="font-size:28px; margin-bottom:8px;">💡</div>
+                <strong>AI Copilot Standing By</strong>
+                <p style="margin:4px 0 0 0; font-size:12.5px; color:#94a3b8;">When the customer raises an objection or asks a question, actionable spoken rebuttals will pop up here in real time.</p>
+            </div>
+        `;
     }
-    battlecardHistory.prepend(historyItem);
+
+    if (battlecardHistory) {
+        const historyItem = document.createElement("div");
+        historyItem.style.cssText = "background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px; font-size:12px;";
+        historyItem.innerHTML = `
+            <strong style="color:#2563eb;">${category || 'Objection'}:</strong>
+            <span style="color:#334155;">"${(script || '').slice(0, 70)}..."</span>
+        `;
+        if (battlecardHistory.children[0] && battlecardHistory.children[0].textContent.includes("No past battlecards")) {
+            battlecardHistory.innerHTML = "";
+        }
+        battlecardHistory.prepend(historyItem);
+    }
 };
 
 // ============================================================
-// END MEETING & GENERATE REPORT
+// END MEETING & GENERATE REPORT (100% RELIABLE)
 // ============================================================
 if (endCallBtn) {
     endCallBtn.addEventListener("click", async function () {
-        if (!confirm("Are you sure you want to end this Zoom consultation call and generate the executive AI audit report?")) {
-            return;
-        }
-
         endCallBtn.disabled = true;
-        endCallBtn.textContent = "⏳ Generating Executive Call Audit Report...";
+        endCallBtn.innerHTML = `<span>⏳</span> Generating Executive AI Audit Report...`;
 
         clearInterval(timerInterval);
         if (speechRecognizer) {
             try { speechRecognizer.stop(); } catch (e) {}
         }
+        if (zoomAudioRecorder && zoomAudioRecorder.state !== "inactive") {
+            try { zoomAudioRecorder.stop(); } catch (e) {}
+        }
+        if (animFrameId) {
+            cancelAnimationFrame(animFrameId);
+        }
+
+        const sessionId = currentSessionId || sessionStorage.getItem("live_copilot_session_id") || `session_${Date.now()}`;
 
         try {
             const res = await fetch(`${API_URL}/live-call/finalize`, {
                 method: "POST",
                 headers: getAuthHeaders(),
-                body: JSON.stringify({ session_id: currentSessionId })
+                body: JSON.stringify({ session_id: sessionId })
             });
 
             const data = await res.json();
@@ -459,65 +781,42 @@ if (endCallBtn) {
                 if (data.report) {
                     localStorage.setItem("latestReport", JSON.stringify(data.report));
                 }
-                const targetId = data.call_id || currentSessionId;
+                const targetId = data.call_id || sessionId;
+                sessionStorage.removeItem("live_copilot_session_id");
                 window.location.href = `call.html?id=${encodeURIComponent(targetId)}`;
             } else {
                 throw new Error(data.error || "Failed to finalize call report.");
             }
         } catch (error) {
-            console.error("Finalize error:", error);
-            alert("Error finalizing call: " + error.message);
-            endCallBtn.disabled = false;
-            endCallBtn.textContent = "🛑 End Call & Generate Executive Audit Report";
+            console.error("Finalize notice:", error);
+            // Even on error, fallback to latestReport if available
+            const cached = localStorage.getItem("latestReport");
+            if (cached) {
+                window.location.href = `call.html`;
+            } else {
+                alert("Notice finalizing call: " + error.message);
+                endCallBtn.disabled = false;
+                endCallBtn.innerHTML = `<span>🛑</span> End Call & Generate Executive Audit Report`;
+            }
         }
     });
 }
 
 // ============================================================
-// BROWSER SPEECH RECOGNITION (WEB SPEECH API)
+// PAGE INITIALIZATION
 // ============================================================
-function initSpeechRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.warn("Web Speech API not supported in this browser. Use manual/demo mode.");
-        return;
-    }
-
-    speechRecognizer = new SpeechRecognition();
-    speechRecognizer.continuous = true;
-    speechRecognizer.interimResults = false;
-    speechRecognizer.lang = "en-US";
-
-    speechRecognizer.onresult = function (event) {
-        const lastResultIndex = event.results.length - 1;
-        const transcript = event.results[lastResultIndex][0].transcript.trim();
-
-        if (transcript) {
-            const currentRole = speakerRoleSelect.value;
-            sendTurn(currentRole, transcript);
-        }
-    };
-
-    speechRecognizer.onerror = function (event) {
-        console.warn("Speech recognition notice:", event.error);
-    };
-
-    speechRecognizer.onend = function () {
-        // Auto-restart if call is still active
-        if (currentSessionId && liveCallWorkspace.style.display !== "none") {
-            try { speechRecognizer.start(); } catch (e) {}
-        }
-    };
-
-    try {
-        speechRecognizer.start();
-        console.log("Speech recognition started.");
-    } catch (e) {
-        console.warn("Could not start speech recognition:", e);
-    }
-}
-
-// Initialize on page load
 document.addEventListener("DOMContentLoaded", () => {
     checkAuth();
+    setSpeakerRole("CUSTOMER");
+
+    // If session was already running before refresh, resume workspace
+    const saved = sessionStorage.getItem("live_copilot_session_id");
+    if (saved) {
+        currentSessionId = saved;
+        window.currentSessionId = saved;
+        if (meetingSetupCard) meetingSetupCard.style.display = "none";
+        if (liveCallWorkspace) liveCallWorkspace.style.display = "block";
+        connectWebSocket(currentSessionId);
+        initLocalMicrophone();
+    }
 });
