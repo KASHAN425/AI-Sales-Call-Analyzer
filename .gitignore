@@ -71,3 +71,5 @@ Desktop.ini
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+backend/reports_cache/
+reports_cache/

@@ -25,7 +25,9 @@ from fastapi import (
     Depends,
     HTTPException,
     Header,
-    Request
+    Request,
+    WebSocket,
+    WebSocketDisconnect
 )
 from fastapi.middleware.cors import CORSMiddleware
 from jose import jwt
@@ -33,6 +35,13 @@ import bcrypt
 
 from database import create_tables, get_connection
 from pipeline import process_audio
+from live_copilot import (
+    create_live_session,
+    get_live_session,
+    process_live_turn,
+    finalize_live_call_and_save,
+    calculate_talk_ratio
+)
 
 # ==================================================
 # JWT CONFIGURATION
@@ -706,57 +715,84 @@ def get_user_calls(
 # ==================================================
 @app.get("/calls/{call_id}")
 def get_single_call(
-    call_id: int,
+    call_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    connection = get_connection()
-    if not connection:
-        return {
-            "success": False,
-            "error": "Database connection failed"
-        }
-
-    cursor = None
+    # 1. First check in-memory finalized live copilot reports
     try:
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute(
-            """
-            SELECT id, job_id, audio_file, performance_score, created_at, report
-            FROM calls
-            WHERE id = %s
-            """,
-            (call_id,)
-        )
-        row = cursor.fetchone()
-        if not row:
+        from live_copilot import get_finalized_report
+        cached_report = get_finalized_report(call_id)
+        if cached_report:
             return {
-                "success": False,
-                "error": "Call report not found."
+                "success": True,
+                "id": call_id,
+                "call_id": call_id,
+                "report": cached_report
             }
+    except Exception as e:
+        print(f"[Single Call] Notice checking live copilot cache: {e}")
 
-        report = json.loads(row["report"])
-        report = enrich_report(report)
+    # 2. Check MySQL database
+    connection = get_connection()
+    if connection:
+        cursor = None
+        try:
+            cursor = connection.cursor(dictionary=True)
+            if call_id.isdigit():
+                cursor.execute(
+                    """
+                    SELECT id, job_id, audio_file, performance_score, created_at, report
+                    FROM calls
+                    WHERE id = %s
+                    """,
+                    (int(call_id),)
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT id, job_id, audio_file, performance_score, created_at, report
+                    FROM calls
+                    WHERE job_id = %s
+                    """,
+                    (call_id,)
+                )
+            row = cursor.fetchone()
+            if row:
+                report = json.loads(row["report"])
+                report = enrich_report(report)
 
+                return {
+                    "success": True,
+                    "id": row["id"],
+                    "call_id": row["id"],
+                    "job_id": row["job_id"],
+                    "audio_file": row["audio_file"],
+                    "performance_score": row["performance_score"],
+                    "created_at": row["created_at"].isoformat() if hasattr(row["created_at"], "isoformat") else str(row["created_at"]),
+                    "report": report
+                }
+        except Exception as e:
+            print(f"[Single Call] Error: {e}")
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
+
+    # 3. Check in-memory background jobs
+    job = jobs.get(call_id)
+    if job and job.get("report"):
         return {
             "success": True,
-            "id": row["id"],
-            "job_id": row["job_id"],
-            "audio_file": row["audio_file"],
-            "performance_score": row["performance_score"],
-            "created_at": row["created_at"].isoformat() if hasattr(row["created_at"], "isoformat") else str(row["created_at"]),
-            "report": report
+            "id": call_id,
+            "call_id": call_id,
+            "report": job.get("report")
         }
-    except Exception as e:
-        print(f"[Single Call] Error: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
+
+    return {
+        "success": False,
+        "error": "Call report not found."
+    }
 
 
 # ==================================================
@@ -912,3 +948,139 @@ def get_me(current_user: dict = Depends(get_current_user)):
         "success": True,
         "user": current_user
     }
+
+
+# ==================================================
+# LIVE COPILOT ROUTES (Zoom & Real-time Calling)
+# ==================================================
+
+@app.post("/live-call/start")
+async def start_live_call(
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    session_id = str(uuid.uuid4())
+    rep_name = body.get("rep_name") or current_user.get("name", "Sales Representative")
+    customer_name = body.get("customer_name") or "Prospective Client"
+    meeting_title = body.get("meeting_title") or "Zoom Sales Consultation"
+
+    session = create_live_session(
+        session_id=session_id,
+        user_id=current_user["id"],
+        rep_name=rep_name,
+        customer_name=customer_name
+    )
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "rep_name": rep_name,
+        "customer_name": customer_name,
+        "meeting_title": meeting_title,
+        "started_at": session["started_at"]
+    }
+
+
+@app.post("/live-call/turn")
+async def submit_live_turn(
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    body = await request.json()
+    session_id = body.get("session_id")
+    role = body.get("role", "SALES REPRESENTATIVE").upper()
+    text = body.get("text", "").strip()
+
+    if not session_id or not text:
+        return {"success": False, "error": "session_id and text are required."}
+
+    result = process_live_turn(session_id, role, text)
+    if "error" in result:
+        return {"success": False, "error": result["error"]}
+
+    return {
+        "success": True,
+        "turn": result["turn"],
+        "talk_stats": result["talk_stats"],
+        "battlecard": result["battlecard"],
+        "total_turns": result["total_turns"],
+        "elapsed_seconds": result["elapsed_seconds"]
+    }
+
+
+@app.post("/live-call/finalize")
+async def finalize_live_call(
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    body = await request.json()
+    session_id = body.get("session_id")
+
+    if not session_id:
+        return {"success": False, "error": "session_id is required."}
+
+    result = finalize_live_call_and_save(session_id)
+    if not result:
+        return {"success": False, "error": "Failed to finalize call or no transcript turns found."}
+
+    return {
+        "success": True,
+        "message": "Call finalized and audit report created successfully.",
+        "call_id": result.get("call_id"),
+        "report": result.get("report")
+    }
+
+
+@app.websocket("/ws/live-copilot/{session_id}")
+async def websocket_live_copilot(websocket: WebSocket, session_id: str):
+    await websocket.accept()
+    session = get_live_session(session_id)
+    if not session:
+        session = create_live_session(session_id=session_id, user_id=1)
+
+    await websocket.send_json({
+        "type": "connected",
+        "session_id": session_id,
+        "message": "Connected to AI Sales Copilot Live Engine."
+    })
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            msg_type = data.get("type", "turn")
+
+            if msg_type == "turn":
+                role = data.get("role", "SALES REPRESENTATIVE").upper()
+                text = data.get("text", "").strip()
+                if text:
+                    res = process_live_turn(session_id, role, text)
+                    await websocket.send_json({
+                        "type": "turn_processed",
+                        "turn": res.get("turn"),
+                        "talk_stats": res.get("talk_stats"),
+                        "battlecard": res.get("battlecard"),
+                        "elapsed_seconds": res.get("elapsed_seconds")
+                    })
+
+            elif msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+
+            elif msg_type == "finalize":
+                res = finalize_live_call_and_save(session_id)
+                await websocket.send_json({
+                    "type": "finalized",
+                    "call_id": res.get("call_id") if res else None,
+                    "report": res.get("report") if res else None
+                })
+                break
+
+    except WebSocketDisconnect:
+        print(f"[WS] Client disconnected from session {session_id}")
+    except Exception as e:
+        print(f"[WS] Live copilot exception: {e}")
