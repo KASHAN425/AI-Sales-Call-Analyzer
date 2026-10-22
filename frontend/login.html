@@ -69,6 +69,21 @@
                 document.getElementById("loginBtn").click();
             });
         }
+
+        // Newly registered user detection
+        const justRegistered = sessionStorage.getItem("user_just_registered");
+        const regEmail = sessionStorage.getItem("registered_user_email");
+        if (justRegistered && regEmail) {
+            const emailInput = document.getElementById("email");
+            const msg = document.getElementById("loginMessage");
+            if (emailInput) emailInput.value = regEmail;
+            if (msg) {
+                msg.style.color = "#059669";
+                msg.textContent = "🎉 Account created successfully! Please enter your password to start your navigation guide.";
+            }
+            const passInput = document.getElementById("password");
+            if (passInput) passInput.focus();
+        }
     </script>
 </body>
 </html>

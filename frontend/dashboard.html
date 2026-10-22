@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Call History Archive | Sales Intelligence CRM</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/onboarding_guide.css">
 </head>
 
 <body>
@@ -72,9 +73,15 @@
                     <p>Audit and search previously analyzed sales conversations</p>
                 </div>
 
-                <a href="index.html" class="btn-primary">
-                    + Log New Call Recording
-                </a>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <button class="quick-guide-trigger-btn" id="openGuideBtn" title="Platform Walkthrough & Guide">
+                        <span class="guide-dot"></span>
+                        📖 Quick Start Guide
+                    </button>
+                    <a href="index.html" class="btn-primary">
+                        + Log New Call Recording
+                    </a>
+                </div>
             </header>
 
             <!-- ================= CRM KPI STATS ================= -->
@@ -196,6 +203,7 @@
 
     <script src="js/config.js"></script>
     <script src="js/dashboard.js"></script>
+    <script src="js/onboarding_guide.js"></script>
 </body>
 
 </html>

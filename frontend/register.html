@@ -135,8 +135,13 @@
                     );
                 }
 
+                sessionStorage.setItem("user_just_registered", "true");
+                sessionStorage.setItem("registered_user_name", name);
+                sessionStorage.setItem("registered_user_email", email);
+                localStorage.removeItem("sales_onboarding_guide_seen");
+
                 registerMessage.style.color = "#059669";
-                registerMessage.textContent = "Account created successfully. Redirecting to login...";
+                registerMessage.textContent = "Account created successfully! Redirecting to login...";
 
                 setTimeout(function () {
                     window.location.href = "login.html";

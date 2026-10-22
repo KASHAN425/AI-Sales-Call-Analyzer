@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/onboarding_guide.css">
     <style>
         /* Live Copilot Specific Enterprise UI Enhancements */
         .live-pulse {
@@ -238,6 +239,10 @@
                             <option value="ur-PK">اردو / Urdu</option>
                         </select>
                     </div>
+                    <button class="quick-guide-trigger-btn" id="openGuideBtn" title="Platform Walkthrough & Guide">
+                        <span class="guide-dot"></span>
+                        📖 Quick Guide
+                    </button>
                     <div id="connectionStatus" style="font-size:13px; font-weight:600; color:#64748b; display:flex; align-items:center; gap:6px;">
                         <span style="width:8px; height:8px; border-radius:50%; background:#94a3b8; display:inline-block;"></span>
                         Standby
@@ -434,5 +439,6 @@
     <!-- SCRIPTS -->
     <script src="js/config.js"></script>
     <script src="js/live_copilot.js"></script>
+    <script src="js/onboarding_guide.js"></script>
 </body>
 </html>
