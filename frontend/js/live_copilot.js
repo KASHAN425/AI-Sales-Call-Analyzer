@@ -191,9 +191,15 @@ window.startLiveCall = async function () {
             })
         });
 
-        const data = await res.json();
-        if (!data.success) {
-            throw new Error(data.error || "Failed to start live session.");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+            if (res.status === 404) {
+                throw new Error("Backend Live Copilot endpoint is not deployed yet on Railway (HTTP 404). Please trigger a Redeploy on your Railway dashboard so the latest live code is active.");
+            }
+            if (res.status === 401) {
+                throw new Error("Authentication session expired (HTTP 401). Please re-login to CRM.");
+            }
+            throw new Error(data.error || data.detail || `Server returned error (${res.status} ${res.statusText})`);
         }
 
         currentSessionId = data.session_id;
